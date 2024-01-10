@@ -9,6 +9,7 @@ import logging
 import traceback
 logger = logging.getLogger()
 
+## Class for data transfer between pipeline stages
 class UsageStatsData:
 
     _data_dict = {}
@@ -25,7 +26,7 @@ class UsageStatsData:
     def __str__(self):
         return self._data_dict.__str__()
 
-
+## Abstract class for pipeline stages
 class AbstractUsageStatsPipelineStage(ABC):
 
     def __init__(self, configContext: ConfigurationContext):
@@ -35,7 +36,7 @@ class AbstractUsageStatsPipelineStage(ABC):
     def run(self, data: UsageStatsData) -> UsageStatsData:
         pass
 
-
+## Class for pipeline build and processing
 class UsageStatsProcessorPipeline:
 
     _input_stage = None
