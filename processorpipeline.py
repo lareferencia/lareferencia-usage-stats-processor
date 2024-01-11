@@ -49,13 +49,13 @@ class UsageStatsProcessorPipeline:
         self._output_stage = outputs
 
     def run(self):
-        data = self._input_stage.run()
+        data = self._input_stage.run(None)
 
         for filter in self._filters_stage:
             data = filter.run(data)            
 
         try:
-            self._output_stage.run(data)
+            return self._output_stage.run(data)
         except Exception as e: 
             logger.error( 'A fatal exception ocurred processing data !!!! {}'.format(e) )
             traceback.print_exc()
