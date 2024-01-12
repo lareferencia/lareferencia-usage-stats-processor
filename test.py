@@ -39,6 +39,7 @@ class TestUsageStatsProcessorPipeline(unittest.TestCase):
         output_data = self.pipeline.run()
 
         filename = self.configContext._config['INPUT']['PARQUET_FILENAME']
+        self.assertEqual(filename, "test.parquet")
 
         # Verificar los resultados
         self.assertEqual(output_data.test_input, "Test Input Stage")
