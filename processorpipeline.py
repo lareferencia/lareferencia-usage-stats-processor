@@ -9,6 +9,23 @@ import logging
 import traceback
 logger = logging.getLogger()
 
+## Function to get class from class path
+def get_class(class_path):
+    groups = class_path.split('.') 
+
+    if len(groups) == 1:
+        return globals()[class_path]
+    else: 
+        if len(groups) == 2:
+            module_path = ".".join(groups[:-1]) 
+            class_name = groups[-1]
+
+            module = __import__( module_path )
+            return getattr(module, class_name )
+        else:
+            raise Exception("Invalid class path {}".format(class_path) )
+
+
 ## Class for data transfer between pipeline stages
 class UsageStatsData:
 
@@ -43,13 +60,14 @@ class UsageStatsProcessorPipeline:
     _filters_stage = []
     _output_stage = None
 
-    def __init__(self, input: AbstractUsageStatsPipelineStage , filters: List[AbstractUsageStatsPipelineStage], outputs: AbstractUsageStatsPipelineStage):
-        self._input_stage = input
-        self._filters_stage = filters
-        self._output_stage = outputs
+    def __init__(self, configContext:ConfigurationContext, input: str, filters: List[str], output: str):
+
+        self._input_stage = get_class(input)(configContext)
+        self._filters_stage = [ get_class(filter)(configContext) for filter in filters ]
+        self._output_stage = get_class(output)(configContext)
 
     def run(self):
-        data = self._input_stage.run(None)
+        data = self._input_stage.run(UsageStatsData())
 
         for filter in self._filters_stage:
             data = filter.run(data)            

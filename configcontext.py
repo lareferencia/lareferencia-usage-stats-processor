@@ -15,8 +15,8 @@ class ConfigurationContext:
          logger.error("No configuration file specified")
          raise Exception("No configuration file specified")
       else:
-         config = configparser.ConfigParser()
-         self._config = config.read(commandLineArgs.config_file)
+         self._config = configparser.ConfigParser()
+         self._config.read(commandLineArgs.config_file)
       
         
        

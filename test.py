@@ -30,13 +30,15 @@ class TestUsageStatsProcessorPipeline(unittest.TestCase):
         args.config_file = "config.tst.ini"
 
         self.configContext = ConfigurationContext(args)
-        self.pipeline = UsageStatsProcessorPipeline( TestInputStage(self.configContext), 
-                                                    [TestFilterStage(self.configContext)], 
-                                                     TestOutputStage(self.configContext) )
+        self.pipeline = UsageStatsProcessorPipeline( self.configContext, "test.TestInputStage", 
+                                                    ["test.TestFilterStage"], 
+                                                     "test.TestOutputStage" )
 
     def test_pipeline(self):
         # Agregar etapas al pipeline
         output_data = self.pipeline.run()
+
+        filename = self.configContext._config['INPUT']['PARQUET_FILENAME']
 
         # Verificar los resultados
         self.assertEqual(output_data.test_input, "Test Input Stage")
