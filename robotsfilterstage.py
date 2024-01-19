@@ -7,5 +7,15 @@ class RobotsFilterStage(AbstractUsageStatsPipelineStage):
         super().__init__(configContext)
     
     def run(self, data: UsageStatsData) -> UsageStatsData:
-        data.robots_filters = "Filtro de robots"
+        
+        mask = self._configContext._config['ROBOTS_FILTER_STAGE']['QUERY_STR']
+        
+        data.grouped_by_idvisit = data.grouped_by_idvisit.query(mask)
+        
+        mask = data.grouped_by_idvisit['idvisit'].values
+        data.input_data = data.input_data.query('idvisit in @mask')
+        
+                
         return data
+    
+     
