@@ -1,6 +1,7 @@
 from processorpipeline import AbstractUsageStatsPipelineStage, UsageStatsData
 from configcontext import ConfigurationContext
 import pandas as pd
+import copy
 
 
 class JoinEventsVisitsStage(AbstractUsageStatsPipelineStage):
@@ -8,7 +9,8 @@ class JoinEventsVisitsStage(AbstractUsageStatsPipelineStage):
         super().__init__(configContext)
     
     def run(self, data: UsageStatsData) -> UsageStatsData:
-        
+
+        empty_entry = { 'views': {}, 'downloads': {}, 'outlinks': {}, 'conversions': {} }
         
         merged_df = data.events_df.merge(data.visits_df, on='idvisit')
            
@@ -17,20 +19,14 @@ class JoinEventsVisitsStage(AbstractUsageStatsPipelineStage):
         dict_df = {}
         
         for index, row in merged_df.iterrows():
-            if row['custom_var_v1'] not in dict_df:
-                dict_df[row['custom_var_v1']] = {
-                    'views': {},
-                    'downloads': {},
-                    'outlinks': {},
-                    'conversiones': {}
-                }
-            dict_df[row['custom_var_v1']]['views'] += row['views']
-            dict_df[row['custom_var_v1']]['downloads'] += row['downloads']
-            dict_df[row['custom_var_v1']]['outlinks'] += row['outlinks']
-            dict_df[row['custom_var_v1']]['conversiones'] += (row['views'] == 1) & (row['downloads'] == 1).astype(int)
-            
-            
+
+            entry = row.get('custom_var_v1', copy.deepcopy(empty_entry) )    
+            row['custom_var_v1'] = entry
+
+            country = row['localtion_country']
+            entry['views'][country] = entry['views'].get(country,0) + row['views']
         
+
         # def custom_agg(df_gr):
         #     country_grouped = df_gr.groupby('location_country')
 
