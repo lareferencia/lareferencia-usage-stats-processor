@@ -7,9 +7,5 @@ class OutputStage(AbstractUsageStatsPipelineStage):
         super().__init__(configContext)
     
     def run(self, data: UsageStatsData) -> UsageStatsData:
-        
-        data.output = "Output Stage"
-        
-        print(data.input_data) 
-         
+
         return data

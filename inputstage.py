@@ -10,11 +10,24 @@ class InputStage(AbstractUsageStatsPipelineStage):
     
     def run(self, data: UsageStatsData) -> UsageStatsData:
     
-        file = self._configContext._config['INPUT_STAGE']['PARQUET_FILENAME']
+        visits_file = self._configContext._config['INPUT_STAGE']['VISITS_PARQUET_FILENAME']
+        events_file = self._configContext._config['INPUT_STAGE']['EVENTS_PARQUET_FILENAME']
         
-        df = pd.read_parquet(file, 
-                     columns=['idvisit', 'idsite', 'idlink_va', 'location_country', 'location_city', 'location_ip', 'url', 'server_time', 'custom_var_value1', 'custom_var_value2',
-                              'custom_var_value6', 'custom_var_value8', 'type', 'location_latitude', 'location_longitude', 'level'])
+      
+        data.visits_df = pd.read_parquet(visits_file, 
+                                    columns=['idvisit', 'visit_last_action_time', 'visit_first_action_time', 
+                                             'visit_total_actions', 
+                                             'location_country'])
+        
+        data.events_df = pd.read_parquet(events_file,
+                                    columns=['idlink_va', 'idvisit', 'idaction_url_ref', 'idaction_name_ref', 'server_time',
+                                             'pageview_position', 'custom_var_v1',
+                                             'custom_var_v3', 'action_type', 'action_url', 'action_url_prefix'])
+        
 
-        data.input_data = df
+
         return data
+  
+
+
+     

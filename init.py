@@ -9,8 +9,13 @@ start_time = time.time()
 
 pipeline = UsageStatsProcessorPipeline(ConfigurationContext(args), 
                                        "inputstage.InputStage", 
-                                       ["groupbyidvisit.GroupByIdVisit", "robotsfilterstage.RobotsFilterStage"],
-                                       "outputstage.OutputStage")
+                                       [ "robotsfilterstage.RobotsFilterStage",
+                                        "downloadeventsfilterstage.DownloadEventsFilterStage",
+                                        "groupbyitemidvisitstage.GroupByItemIdvisitStage",
+                                        "joineventsvisitsstage.JoinEventsVisitsStage",
+                                        "groupbyitem.GroupByItem" ],
+                                        "outputstage.OutputStage")
+
 
 pipeline.run()
 
