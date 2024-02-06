@@ -21,7 +21,14 @@ class InputStage(AbstractUsageStatsPipelineStage):
             day = str(day)
             
             
-            return lambda x: (x['idsite'] == idsite) and (x['year'] ==  year ) and (x['month'] == month) and (x['day'] == day)
+            if day is None:
+                return lambda x: (x['idsite'] == idsite) and (x['year'] ==  year ) and (x['month'] == month)  
+            else:
+                day = str(day)
+                return lambda x: (x['idsite'] == idsite) and (x['year'] ==  year ) and (x['month'] == month) and (x['day'] == day)
+        
+
+            
         
         
         def read_parquet_file(type, columns):
@@ -35,6 +42,7 @@ class InputStage(AbstractUsageStatsPipelineStage):
                 path='s3://' + s3_bucket + type,
                 dataset=True,
                 partition_filter = partition_filter( 48, year, 1, 2 ),
+                partition_filter = partition_filter( 48, 2023, 1, None ),
                 columns=columns
                 )
                 
