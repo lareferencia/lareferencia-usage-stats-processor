@@ -1,7 +1,6 @@
 from processorpipeline import AbstractUsageStatsPipelineStage, UsageStatsData
 from configcontext import ConfigurationContext
-
-
+import copy
 
 
 class GroupByItem(AbstractUsageStatsPipelineStage):
@@ -10,19 +9,34 @@ class GroupByItem(AbstractUsageStatsPipelineStage):
     
     def run(self, data: UsageStatsData) -> UsageStatsData:
         
-        events_df = data.events_df
-        events_df['conversiones'] = (events_df['views'] == 1) & (events_df['downloads'] == 1).astype(int)
+        empty_entry = {}
         
-        df_grouped_by_item = events_df.groupby('custom_var_v1').agg({
-            'views': 'sum', 
-            'outlinks': 'sum', 
-            'downloads': 'sum', 
-            'conversiones': 'sum'
-
-        }).reset_index()
+        actions = self._configContext._config['JOIN_EVENTS_VISITS_STAGE']['ACTIONS_LIST']
+        actions = actions.split(', ')
         
-        # print(df_grouped_by_item.sort_values(by=['conversiones'], ascending=False).head(10))
+        for action in actions:
+            empty_entry[action] = {}
+            empty_entry['total_' + action] = 0
+                
         
-        data.events_by_item = df_grouped_by_item
+        dict_df = {}
+        
+        for index, row in data.events_df.iterrows():
+            
+            identifier = row['oai_identifier']
+            entry = dict_df.get(identifier, copy.deepcopy(empty_entry) )    
+            dict_df[identifier] = entry
+            country = row['location_country']
+            
+            for action in actions:
+                if row[action] > 0:
+                    entry[action][country] = entry[action].get(country, 0) + row[action]
+                    entry['total_' + action] += row[action]
+                
+            
+        # for identifier, entry in dict_df.items():
+        #         print( '%s %s' % (identifier, entry) )
+                
+        
     
         return data       

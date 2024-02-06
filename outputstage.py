@@ -8,4 +8,7 @@ class OutputStage(AbstractUsageStatsPipelineStage):
     
     def run(self, data: UsageStatsData) -> UsageStatsData:
 
+
+        print(data.events_df)
+        
         return data

@@ -1,6 +1,7 @@
 from processorpipeline import AbstractUsageStatsPipelineStage, UsageStatsData
 from configcontext import ConfigurationContext
 import pandas as pd
+import awswrangler as wr
 
 
 class InputStage(AbstractUsageStatsPipelineStage):
@@ -10,21 +11,46 @@ class InputStage(AbstractUsageStatsPipelineStage):
     
     def run(self, data: UsageStatsData) -> UsageStatsData:
     
-        visits_file = self._configContext._config['INPUT_STAGE']['VISITS_PARQUET_FILENAME']
-        events_file = self._configContext._config['INPUT_STAGE']['EVENTS_PARQUET_FILENAME']
+        s3_bucket = self._configContext._config['S3']['BUCKET']
         
-      
-        data.visits_df = pd.read_parquet(visits_file, 
-                                    columns=['idvisit', 'visit_last_action_time', 'visit_first_action_time', 
-                                             'visit_total_actions', 
-                                             'location_country'])
+        def partition_filter(idsite, year, month, day):
+            
+            idsite = str(idsite)
+            year = str(year)
+            month = str(month)
+            day = str(day)
+            
+            return lambda x: (x['idsite'] == idsite) and (x['year'] ==  year ) and (x['month'] == month) and (x['day'] == day)
         
-        data.events_df = pd.read_parquet(events_file,
-                                    columns=['idlink_va', 'idvisit', 'idaction_url_ref', 'idaction_name_ref', 'server_time',
-                                             'pageview_position', 'custom_var_v1',
-                                             'custom_var_v3', 'action_type', 'action_url', 'action_url_prefix'])
         
-
+        def read_parquet_file(type, columns):
+            
+            try: 
+                df = wr.s3.read_parquet(
+                path='s3://' + s3_bucket + type,
+                dataset=True,
+                partition_filter = partition_filter( 48, 2023, 1, 2 ),
+                columns=columns
+                )
+                
+                df = df.rename(columns={ 'custom_var_v1':'oai_identifier' })
+                return df
+            
+            except:
+                print('Error reading parquet file')
+     
+            
+        data.events_df  = read_parquet_file ('/events', [
+            'idlink_va', 'idvisit','server_time', 'custom_var_v1', 
+            'custom_var_v3', 'action_type', 'action_url', 'action_url_prefix'
+            ])
+        
+        data.visits_df = read_parquet_file ('/visits', [
+            'idvisit', 'visit_last_action_time', 'visit_first_action_time', 
+            'visit_total_actions', 'location_country'
+            ])
+        
+        
 
         return data
   
