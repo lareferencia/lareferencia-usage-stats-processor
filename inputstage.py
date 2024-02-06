@@ -20,16 +20,21 @@ class InputStage(AbstractUsageStatsPipelineStage):
             month = str(month)
             day = str(day)
             
+            
             return lambda x: (x['idsite'] == idsite) and (x['year'] ==  year ) and (x['month'] == month) and (x['day'] == day)
         
         
         def read_parquet_file(type, columns):
             
+            year = self.getArgs()["year"]
+            print(year)
+            
+            
             try: 
                 df = wr.s3.read_parquet(
                 path='s3://' + s3_bucket + type,
                 dataset=True,
-                partition_filter = partition_filter( 48, 2023, 1, 2 ),
+                partition_filter = partition_filter( 48, year, 1, 2 ),
                 columns=columns
                 )
                 
