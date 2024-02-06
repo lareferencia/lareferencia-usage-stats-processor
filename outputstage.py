@@ -6,6 +6,37 @@ import sys
 
 class OutputStage(AbstractUsageStatsPipelineStage):
 
+    MAPPING = {
+        "properties" : {
+
+            "id" : { "type" : "keyword" },
+            
+            "date" : { "type" : "date" },
+            
+            "year" : { "type" : "long" },
+            "month" : { "type" : "long" },
+            "day" : { "type" : "long" },
+    
+            "identifier" : { "type" : "text" },
+            "identifier_prefix" : { "type" : "text" },
+
+            "views" :       { "type" : "long" },
+            "downloads" :   { "type" : "long" },
+            "conversions" : { "type" : "long" },
+            "outlinks" :    { "type" : "long"},
+
+            "stats_by_country" : {
+                "properties" : {
+                    "country" :     { "type" : "keyword" },
+                    "views" :       { "type" : "long" },
+                    "downloads" :   { "type" : "long" },
+                    "conversions" : { "type" : "long" },
+                    "outlinks" :    { "type" : "long"}        
+                }
+            }
+        }
+    }
+
     def __init__(self, configContext: ConfigurationContext):
         super().__init__(configContext)
     
@@ -27,6 +58,7 @@ class OutputStage(AbstractUsageStatsPipelineStage):
         try:
             index = wr.opensearch.create_index(
                 client=opensearch,
+                mappings=self.MAPPING,
                 index=index_name )
             print ('Index %s created' % (index_name))
         except:
