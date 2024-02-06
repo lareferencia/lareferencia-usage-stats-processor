@@ -1,7 +1,8 @@
 from processorpipeline import AbstractUsageStatsPipelineStage, UsageStatsData
 from configcontext import ConfigurationContext
 import copy
-
+import uuid
+import datetime
 
 class GroupByItem(AbstractUsageStatsPipelineStage):
     def __init__(self, configContext: ConfigurationContext):
@@ -19,13 +20,13 @@ class GroupByItem(AbstractUsageStatsPipelineStage):
             empty_entry['total_' + action] = 0
                 
         
-        dict_df = {}
+        tmp_dict = {}
         
         for index, row in data.events_df.iterrows():
             
             identifier = row['oai_identifier']
-            entry = dict_df.get(identifier, copy.deepcopy(empty_entry) )    
-            dict_df[identifier] = entry
+            entry = tmp_dict.get(identifier, copy.deepcopy(empty_entry) )    
+            tmp_dict[identifier] = entry
             country = row['location_country']
             
             for action in actions:
@@ -33,10 +34,14 @@ class GroupByItem(AbstractUsageStatsPipelineStage):
                     entry[action][country] = entry[action].get(country, 0) + row[action]
                     entry['total_' + action] += row[action]
                 
-            
-        # for identifier, entry in dict_df.items():
-        #         print( '%s %s' % (identifier, entry) )
-                
-        
+                           
+        # transform dict_df into a list of documents         
+        data.documents = [
+            {**data, 'identifier': identifier, 'id': uuid.uuid4(), 'date': datetime.datetime.now()}
+            for identifier, data in tmp_dict.items()
+        ]
+
+        # delete the reference to the temporary dictionary
+        del tmp_dict
     
         return data       
