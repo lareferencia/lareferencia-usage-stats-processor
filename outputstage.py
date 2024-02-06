@@ -12,7 +12,6 @@ class OutputStage(AbstractUsageStatsPipelineStage):
     def run(self, data: UsageStatsData) -> UsageStatsData:
 
         elastic_url = self._configContext._config['OUTPUT_STAGE']['ELASTIC_URL']
-
         index_name = self._configContext._config['OUTPUT_STAGE']['INDEX_NAME']
 
         try:

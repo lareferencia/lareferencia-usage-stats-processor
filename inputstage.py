@@ -11,7 +11,7 @@ class InputStage(AbstractUsageStatsPipelineStage):
     
     def run(self, data: UsageStatsData) -> UsageStatsData:
     
-        s3_bucket = self._configContext._config['S3']['BUCKET']
+        s3_bucket = self.getConfig()['S3']['BUCKET']
         
         def partition_filter(idsite, year, month, day):
             

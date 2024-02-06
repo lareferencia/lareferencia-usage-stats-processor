@@ -17,6 +17,16 @@ class ConfigurationContext:
       else:
          self._config = configparser.ConfigParser()
          self._config.read(commandLineArgs.config_file)
+   
+   def getConfig(self):
+      return self._config
+   
+   def getArgs(self):
+      return self._commandLineArgs
+   
+
+   
+
       
         
        
