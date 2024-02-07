@@ -7,15 +7,24 @@ class RobotsFilterStage(AbstractUsageStatsPipelineStage):
         super().__init__(configContext)
     
     def run(self, data: UsageStatsData) -> UsageStatsData:
+                
+        visits_df = data.visits_df
         
+        total_time = (visits_df['visit_last_action_time'] - visits_df['visit_first_action_time']).dt.total_seconds()
+        visits_df = visits_df.assign(
+            avg_action_time=total_time / visits_df['visit_total_actions'],
+            total_time=total_time
+        )
+    
         mask = self._configContext._config['ROBOTS_FILTER_STAGE']['QUERY_STR']
+        visits_df = visits_df.query(mask)
+        data.visits_df = visits_df
         
-        data.grouped_by_idvisit = data.grouped_by_idvisit.query(mask)
-        
-        mask = data.grouped_by_idvisit['idvisit'].values
-        data.input_data = data.input_data.query('idvisit in @mask')
+        events_df = data.events_df[data.events_df['idvisit'].isin(visits_df['idvisit'])]
+        data.events_df = events_df
         
                 
         return data
-    
      
+ 
+        
