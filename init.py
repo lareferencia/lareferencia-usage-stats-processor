@@ -32,7 +32,9 @@ def main(args):
         pipeline.run()
         
     except Exception as e:
-        print("Error reading config file: %s" % e)
+        print("Error: %s" % e)
+        # print traceback of e
+        
 
     
     

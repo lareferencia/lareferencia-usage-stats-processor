@@ -5,6 +5,7 @@ from configcontext import ConfigurationContext
 class RobotsFilterStage(AbstractUsageStatsPipelineStage):
     def __init__(self, configContext: ConfigurationContext):
         super().__init__(configContext)
+        self.mask = configContext.getConfig('ROBOTS_FILTER_STAGE','QUERY_STR')
     
     def run(self, data: UsageStatsData) -> UsageStatsData:
                 
@@ -16,12 +17,8 @@ class RobotsFilterStage(AbstractUsageStatsPipelineStage):
             total_time=total_time
         )
     
-        mask = self._configContext._config['ROBOTS_FILTER_STAGE']['QUERY_STR']
-        visits_df = visits_df.query(mask)
-        data.visits_df = visits_df
-        
-        events_df = data.events_df[data.events_df['idvisit'].isin(visits_df['idvisit'])]
-        data.events_df = events_df
+        data.visits_df = visits_df.query(self.mask)
+        data.events_df = data.events_df[data.events_df['idvisit'].isin(visits_df['idvisit'])]
         
                 
         return data

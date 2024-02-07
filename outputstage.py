@@ -2,6 +2,7 @@ from processorpipeline import AbstractUsageStatsPipelineStage, UsageStatsData
 from configcontext import ConfigurationContext
 import awswrangler as wr
 import sys
+import datetime
 
 
 class OutputStage(AbstractUsageStatsPipelineStage):
@@ -38,17 +39,63 @@ class OutputStage(AbstractUsageStatsPipelineStage):
         }
     }
 
+    def _build_stats(self, obj, stats):
+        obj.update([(action, stats[action]) for action in self.actions])
+        return obj
+
+
     def __init__(self, configContext: ConfigurationContext):
         super().__init__(configContext)
-    
+
+        # get the actions from the configuration
+        self.actions = configContext.getActions()
+
+        self.elastic_url = configContext.getConfig('OUTPUT_STAGE','ELASTIC_URL')
+        self.index_prefix = configContext.getConfig('OUTPUT_STAGE','INDEX_PREFIX')
+
+        self.COUNTRY_LABEL = configContext.getLabel('COUNTRY')
+        self.STATS_BY_COUNTRY_LABEL = configContext.getLabel('STATS_BY_COUNTRY')
+
+
     def run(self, data: UsageStatsData) -> UsageStatsData:
 
-        elastic_url = self._configContext._config['OUTPUT_STAGE']['ELASTIC_URL']
-        index_name = self._configContext._config['OUTPUT_STAGE']['INDEX_NAME']
+
+        year = self.getCtx().getArg('year')
+        month = self.getCtx().getArg('month')
+        day = self.getCtx().getArg('day')
+        if day is None:
+            day = 1
+
+        idsite = self.getCtx().getArg('site')
+
+        # create the index name
+        index_name = '%s-%s-%s' % (self.index_prefix, idsite, year)
+
+         # transform dict_df into a list of documents, converting the dictionary into a list of documents and          
+        data.documents = [
+            self._build_stats( 
+            {
+              'id': '%s-%s-%s-%s' % (identifier, year, month, day),
+  
+              'identifier': identifier, 
+
+              self.STATS_BY_COUNTRY_LABEL: [ self._build_stats({ self.COUNTRY_LABEL: country }, country_data)
+                                       for country, country_data in data[ self.STATS_BY_COUNTRY_LABEL ].items() ], 
+                                   
+              'date': datetime.datetime(year, month, day),
+              
+              'idsite': idsite,
+              'year': year,
+              'month': month,
+              'day': day,
+
+            }, data)
+            for identifier, data in data.agg_dict.items()
+        ]
 
         try:
             opensearch = wr.opensearch.connect(
-                host=elastic_url
+                host=self.elastic_url
         #     username='FGAC-USERNAME(OPTIONAL)',
         #     password='FGAC-PASSWORD(OPTIONAL)'
         )

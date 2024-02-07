@@ -53,11 +53,8 @@ class AbstractUsageStatsPipelineStage(ABC):
     def run(self, data: UsageStatsData) -> UsageStatsData:
         pass
 
-    def getConfig(self):
-        return self._configContext.getConfig()
-    
-    def getArgs(self):
-        return self._configContext.getArgs()
+    def getCtx(self):
+        return self._configContext
 
 ## Class for pipeline build and processing
 class UsageStatsProcessorPipeline:

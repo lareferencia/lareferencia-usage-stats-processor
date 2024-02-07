@@ -7,9 +7,15 @@ import awswrangler as wr
 class InputStage(AbstractUsageStatsPipelineStage):
     
     def __init__(self, configContext: ConfigurationContext):
-        print("InputStage __init__")
         super().__init__(configContext)
-        self.s3_bucket = self.getConfig()['S3']['BUCKET']
+
+        # get the s3 bucket from the configuration
+        self.s3_bucket = configContext.getConfig('INPUT_STAGE', 'S3_BUCKET')
+        self.visits_path = configContext.getConfig('INPUT_STAGE', 'VISITS_PATH')
+        self.events_path = configContext.getConfig('INPUT_STAGE', 'EVENTS_PATH')
+
+        # get the labels from the configuration
+        self.COUNTRY_LABEL = configContext.getLabel('COUNTRY')
 
     def _partition_filter(idsite, year, month, day):
         
@@ -42,15 +48,15 @@ class InputStage(AbstractUsageStatsPipelineStage):
     
     def run(self, data: UsageStatsData) -> UsageStatsData:
 
-        year = self.getArgs()['year']
-        month = self.getArgs()['month']
-        day = self.getArgs()['day']
-        idsite = self.getArgs()['site']
+        year = self.getCtx().getArg('year')
+        month = self.getCtx().getArg('month')
+        day = self.getCtx().getArg('day')
+        idsite = self.getCtx().getArg('site')
 
         partition_filter = InputStage._partition_filter(idsite, year, month, day)
 
         # read the events file       
-        data.events_df  = InputStage._read_parquet_file( self.s3_bucket + '/events', 
+        data.events_df  = InputStage._read_parquet_file( self.s3_bucket + self.events_path, 
             ['idlink_va', 'idvisit','server_time', 'custom_var_v1', 'custom_var_v3', 'action_type', 'action_url', 'action_url_prefix'],
             partition_filter )
         
@@ -58,9 +64,12 @@ class InputStage(AbstractUsageStatsPipelineStage):
         data.events_df = data.events_df.rename(columns={ 'custom_var_v1':'oai_identifier' })
 
         # read the visits file
-        data.visits_df = InputStage._read_parquet_file ( self.s3_bucket + '/visits', 
+        data.visits_df = InputStage._read_parquet_file ( self.s3_bucket + self.visits_path, 
             ['idvisit', 'visit_last_action_time', 'visit_first_action_time', 'visit_total_actions', 'location_country'],
             partition_filter )
+        
+        # rename the location_country column to country
+        data.visits_df = data.visits_df.rename(columns={'location_country': self.COUNTRY_LABEL})
         
         return data
   
