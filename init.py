@@ -4,10 +4,7 @@ import time
 import argparse
 import datetime
 
-args = type('args', (object,), {})()
-args.config_file = "config.tst.ini"
 
-start_time = time.time()
 
 
 
@@ -20,9 +17,11 @@ def main(args):
     # month = args.get("month", None)
     # day = args.get("day", None)
     # date = args.get("date", None)
+
+    config_context = ConfigurationContext(args)
     
     try:
-        pipeline = UsageStatsProcessorPipeline(ConfigurationContext(args), 
+        pipeline = UsageStatsProcessorPipeline(config_context, 
                                        "inputstage.InputStage", 
                                        [ "robotsfilterstage.RobotsFilterStage",
                                         "downloadeventsfilterstage.DownloadEventsFilterStage",
@@ -43,29 +42,28 @@ def parse_args():
     
     #cambiar config.tst.ini por config.ini luego
     parser.add_argument( "-c", "--config_file_path", default='config.tst.ini', help="config file", required=False )
-    parser.add_argument( "-s", "--site", default='all', help="site id", required=False)
-    parser.add_argument( "-y", "--year", default=datetime.datetime.now().year, type=int, help="year", required=False )
-    parser.add_argument("-month", default=1, type=int, help="from month", required=False)
-    parser.add_argument("-day", default=None, type=int, help="to day", required=False)
-    parser.add_argument("--date", type=str, default=None, help="date to process", required=False)   
-
+    parser.add_argument( "-s", "--site", default=48, help="site id", required=False)
+   
+    #parser.add_argument( "-y", "--year", default=datetime.datetime.now().year, type=int, help="year", required=False )
+    parser.add_argument( "-y", "--year", default=2023, type=int, help="year", required=False )
+    parser.add_argument("-m", "--month", default=1, type=int, help="month", required=False)
+    parser.add_argument("-d", "--day", default=None, type=int, help="day", required=False)
+   
     args = parser.parse_args()
     return args
     
 
 if __name__ == "__main__":
-    args = vars(parse_args())
+
+    start_time = time.time()
+
+    # parse arguments
+    args = vars(parse_args())     
     
-    date = args.get("date")
-    if date != None:
-        try:
-            datetime.datetime.strptime(date, '%Y-%m-%d')
-        except ValueError:
-            raise ValueError("Incorrect data format, should be YYYY-MM-DD")
-        
+    # run the main function
     main(args)
 
-end_time = time.time()
+    end_time = time.time()
+    elapsed_time = end_time - start_time
 
-elapsed_time = end_time - start_time
-print(f"Tiempo de ejecución: {elapsed_time} segundos")
+    print(f"Tiempo de ejecución: {elapsed_time} segundos")

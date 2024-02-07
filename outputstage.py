@@ -10,6 +10,7 @@ class OutputStage(AbstractUsageStatsPipelineStage):
         "properties" : {
 
             "id" : { "type" : "keyword" },
+            "idsite" : { "type" : "long" },
             
             "date" : { "type" : "date" },
             
