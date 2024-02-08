@@ -4,7 +4,7 @@ import pandas as pd
 import awswrangler as wr
 
 
-class InputStage(AbstractUsageStatsPipelineStage):
+class S3ParquetInputStage(AbstractUsageStatsPipelineStage):
     
     def __init__(self, configContext: ConfigurationContext):
         super().__init__(configContext)
@@ -16,6 +16,7 @@ class InputStage(AbstractUsageStatsPipelineStage):
 
         # get the labels from the configuration
         self.COUNTRY_LABEL = configContext.getLabel('COUNTRY')
+        self.OAI_IDENTIFIER_LABEL = configContext.getLabel('OAI_IDENTIFIER')
 
     def _partition_filter(idsite, year, month, day):
         
@@ -52,19 +53,25 @@ class InputStage(AbstractUsageStatsPipelineStage):
         month = self.getCtx().getArg('month')
         day = self.getCtx().getArg('day')
         idsite = self.getCtx().getArg('site')
+        type = self.getCtx().getArg('type')
 
-        partition_filter = InputStage._partition_filter(idsite, year, month, day)
+        partition_filter = S3ParquetInputStage._partition_filter(idsite, year, month, day)
+
+        # set the custom_var column name based on the type
+        identifier_custom_var = 'custom_var_v1' if type == 'R' else 'custom_var_v6'
+        print(identifier_custom_var)
+        print(type)
 
         # read the events file       
-        data.events_df  = InputStage._read_parquet_file( self.s3_bucket + self.events_path, 
-            ['idlink_va', 'idvisit','server_time', 'custom_var_v1', 'custom_var_v3', 'action_type', 'action_url', 'action_url_prefix'],
+        data.events_df  = S3ParquetInputStage._read_parquet_file( self.s3_bucket + self.events_path, 
+            ['idlink_va', 'idvisit','server_time', identifier_custom_var, 'action_type', 'action_url', 'action_url_prefix'],
             partition_filter )
         
         # rename the custom_var_v1 column to oai_identifier
-        data.events_df = data.events_df.rename(columns={ 'custom_var_v1':'oai_identifier' })
+        data.events_df = data.events_df.rename(columns={ identifier_custom_var: self.OAI_IDENTIFIER_LABEL })
 
         # read the visits file
-        data.visits_df = InputStage._read_parquet_file ( self.s3_bucket + self.visits_path, 
+        data.visits_df = S3ParquetInputStage._read_parquet_file ( self.s3_bucket + self.visits_path, 
             ['idvisit', 'visit_last_action_time', 'visit_first_action_time', 'visit_total_actions', 'location_country'],
             partition_filter )
         

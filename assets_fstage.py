@@ -3,7 +3,7 @@ from configcontext import ConfigurationContext
 import re
 
 
-class DownloadEventsFilterStage(AbstractUsageStatsPipelineStage):
+class AssetsFilterStage(AbstractUsageStatsPipelineStage):
     def __init__(self, configContext: ConfigurationContext):
         super().__init__(configContext)
         self.regex = configContext.getConfig('DOWNLOAD_EVENTS_FILTER_STAGE','REGEX')

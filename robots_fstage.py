@@ -7,7 +7,7 @@ class RobotsFilterStage(AbstractUsageStatsPipelineStage):
         super().__init__(configContext)
         
         # get the mask from the configuration
-        self.mask = configContext.getConfig('ROBOTS_FILTER_STAGE','QUERY_STR')
+        self.query = configContext.getConfig('ROBOTS_FILTER_STAGE','QUERY_STR')
     
     def run(self, data: UsageStatsData) -> UsageStatsData:
                         
@@ -19,7 +19,7 @@ class RobotsFilterStage(AbstractUsageStatsPipelineStage):
         )
     
         # filter the visits dataframe with the mask
-        data.visits_df = data.visits_df.query(self.mask)
+        data.visits_df = data.visits_df.query(self.query)
         
         # filter the events dataframe with the visits dataframe
         data.events_df = data.events_df[data.events_df['idvisit'].isin(data.visits_df['idvisit'])]

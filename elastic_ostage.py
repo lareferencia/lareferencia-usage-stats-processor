@@ -5,7 +5,7 @@ import sys
 import datetime
 
 
-class OutputStage(AbstractUsageStatsPipelineStage):
+class ElasticOutputStage(AbstractUsageStatsPipelineStage):
 
     MAPPING = {
         "properties" : {
@@ -121,5 +121,4 @@ class OutputStage(AbstractUsageStatsPipelineStage):
             bulk_size=1000
         )
     
-        print(data)
         return data

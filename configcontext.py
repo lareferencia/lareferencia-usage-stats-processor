@@ -9,6 +9,8 @@ import configparser
 GENERAL = 'GENERAL'
 LABELS = 'LABELS'
 ACTIONS = 'ACTIONS'
+ACTIONS_ID = 'ACTIONS_ID'
+
 
 class ConfigurationContext:
 
@@ -30,6 +32,12 @@ class ConfigurationContext:
          else:
             logger.error("No ACTIONS section in configuration file")
             raise Exception("No ACTIONS section in configuration file")
+         
+         if ACTIONS_ID in self._config[GENERAL]:
+            self.actions_id = list(map(lambda x: int(x.strip()), self._config[GENERAL][ACTIONS_ID].split(',')))   
+         else:
+            logger.error("No ACTIONS_ID section in configuration file")
+            raise Exception("No ACTIONS_ID section in configuration file")
       else:
          logger.error("No GENERAL section in configuration file")
          raise Exception("No GENERAL section in configuration file")
@@ -56,6 +64,9 @@ class ConfigurationContext:
    
    def getActions(self):
       return self.actions
+   
+   def getActionsId(self):
+      return self.actions_id
    
    def getLabel(self, label):
       try:

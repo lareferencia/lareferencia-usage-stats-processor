@@ -15,13 +15,14 @@ def main(args):
     
     try:
         pipeline = UsageStatsProcessorPipeline(config_context, 
-                                       "inputstage.InputStage", 
-                                       [ "robotsfilterstage.RobotsFilterStage",
-                                        "downloadeventsfilterstage.DownloadEventsFilterStage",
-                                        "groupbyitemidvisitstage.GroupByItemIdvisitStage",
-                                        "joineventsvisitsstage.JoinEventsVisitsStage",
-                                        "groupbyitem.GroupByItem" ],
-                                        "outputstage.OutputStage")
+                                       "s3parquet_istage.S3ParquetInputStage",
+                                        
+                                       [ "robots_fstage.RobotsFilterStage",
+                                        "assets_fstage.AssetsFilterStage",
+                                        "metrics_fstage.MetricsFilterStage",
+                                        "aggbyitem_fstage.AggByItemFilterStage" ],
+                                       
+                                        "elastic_ostage.ElasticOutputStage")
         pipeline.run()
         
     except Exception as e:
@@ -37,10 +38,11 @@ def parse_args():
     parser.add_argument( "-c", "--config_file_path", default='config.tst.ini', help="config file", required=False )
     parser.add_argument( "-s", "--site", default=48, help="site id", required=False)
    
-    #parser.add_argument( "-y", "--year", default=datetime.datetime.now().year, type=int, help="year", required=False )
-    parser.add_argument( "-y", "--year", default=2023, type=int, help="year", required=False )
-    parser.add_argument("-m", "--month", default=1, type=int, help="month", required=False)
-    parser.add_argument("-d", "--day", default=None, type=int, help="day", required=False)
+    parser.add_argument( "-t", "--type", default='R', type=str, help="(R|L|N)", required=False )
+
+    parser.add_argument( "-y", "--year", default=2023, type=int, help="yyyy", required=False )
+    parser.add_argument("-m", "--month", default=1, type=int, help="m", required=False)
+    parser.add_argument("-d", "--day", default=None, type=int, help="d", required=False)
    
     args = parser.parse_args()
     return args

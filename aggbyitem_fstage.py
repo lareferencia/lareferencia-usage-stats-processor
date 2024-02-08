@@ -4,7 +4,7 @@ import copy
 import uuid
 import datetime
 
-class GroupByItem(AbstractUsageStatsPipelineStage):
+class AggByItemFilterStage(AbstractUsageStatsPipelineStage):
 
 
     def __init__(self, configContext: ConfigurationContext):
