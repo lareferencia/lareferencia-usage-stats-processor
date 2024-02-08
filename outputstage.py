@@ -121,4 +121,5 @@ class OutputStage(AbstractUsageStatsPipelineStage):
             bulk_size=1000
         )
     
+        print(data)
         return data

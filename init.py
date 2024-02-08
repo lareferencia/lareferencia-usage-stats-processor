@@ -11,13 +11,6 @@ import datetime
 def main(args):
    
     
-    # config_file_path = args.get("config_file_path", None)
-    # site = args.get("site", None)
-    # year = args.get("year", None)
-    # month = args.get("month", None)
-    # day = args.get("day", None)
-    # date = args.get("date", None)
-
     config_context = ConfigurationContext(args)
     
     try:
@@ -35,8 +28,6 @@ def main(args):
         print("Error: %s" % e)
         # print traceback of e
         
-
-    
     
 
 def parse_args():

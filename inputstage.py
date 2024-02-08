@@ -9,7 +9,7 @@ class InputStage(AbstractUsageStatsPipelineStage):
     def __init__(self, configContext: ConfigurationContext):
         super().__init__(configContext)
 
-        # get the s3 bucket from the configuration
+        # get the s3 bucket and type of parquet from the configuration
         self.s3_bucket = configContext.getConfig('INPUT_STAGE', 'S3_BUCKET')
         self.visits_path = configContext.getConfig('INPUT_STAGE', 'VISITS_PATH')
         self.events_path = configContext.getConfig('INPUT_STAGE', 'EVENTS_PATH')

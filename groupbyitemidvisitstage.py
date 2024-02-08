@@ -8,17 +8,18 @@ class GroupByItemIdvisitStage(AbstractUsageStatsPipelineStage):
     
     def run(self, data: UsageStatsData) -> UsageStatsData:
         
-        events_df = data.events_df
+        # initialize the views, outlinks and downloads columns    
+        data.events_df['views'] = 0
+        data.events_df['outlinks'] = 0
+        data.events_df['downloads'] = 0
         
-        events_df['views'] = 0
-        events_df['outlinks'] = 0
-        events_df['downloads'] = 0
+        # set the views, outlinks and downloads columns to 1 if the action_type is 1, 2 or 3 respectively
+        data.events_df.loc[data.events_df['action_type'] == 1, 'views'] = 1
+        data.events_df.loc[data.events_df['action_type'] == 2, 'outlinks'] = 1
+        data.events_df.loc[data.events_df['action_type'] == 3, 'downloads'] = 1
         
-        events_df.loc[events_df['action_type'] == 1, 'views'] = 1
-        events_df.loc[events_df['action_type'] == 2, 'outlinks'] = 1
-        events_df.loc[events_df['action_type'] == 3, 'downloads'] = 1
-        
-        data.events_df = events_df.groupby(['idvisit', 'oai_identifier']).agg({
+        # group by idvisit and oai_identifier and sum the views, outlinks and downloads columns
+        data.events_df = data.events_df.groupby(['idvisit', 'oai_identifier']).agg({
             'views': 'max', 
             'outlinks': 'max', 
             'downloads': 'max', 
