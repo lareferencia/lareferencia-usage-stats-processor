@@ -50,8 +50,8 @@ class ElasticOutputStage(AbstractUsageStatsPipelineStage):
         # get the actions from the configuration
         self.actions = configContext.getActions()
 
-        self.elastic_url = configContext.getConfig('OUTPUT_STAGE','ELASTIC_URL')
-        self.index_prefix = configContext.getConfig('OUTPUT_STAGE','INDEX_PREFIX')
+        self.elastic_url = configContext.getConfig('OUTPUT','ELASTIC_URL')
+        self.index_prefix = configContext.getConfig('OUTPUT','INDEX_PREFIX')
 
         self.COUNTRY_LABEL = configContext.getLabel('COUNTRY')
         self.STATS_BY_COUNTRY_LABEL = configContext.getLabel('STATS_BY_COUNTRY')
@@ -120,5 +120,6 @@ class ElasticOutputStage(AbstractUsageStatsPipelineStage):
             id_keys=["id"],
             bulk_size=1000
         )
+        
     
         return data

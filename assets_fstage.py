@@ -6,12 +6,12 @@ import re
 class AssetsFilterStage(AbstractUsageStatsPipelineStage):
     def __init__(self, configContext: ConfigurationContext):
         super().__init__(configContext)
-        self.regex = configContext.getConfig('DOWNLOAD_EVENTS_FILTER_STAGE','REGEX')
+        self.REGEX = configContext.getConfig('ASSETS_FILTER','REGEX')
         
     def run(self, data: UsageStatsData) -> UsageStatsData:
                  
         # compile the regex pattern              
-        regex = re.compile(self.regex)
+        regex = re.compile(self.REGEX)
         
         # function to filter the action_url column based on the regex pattern
         def regex_filter(x):
