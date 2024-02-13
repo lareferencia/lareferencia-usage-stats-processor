@@ -15,32 +15,32 @@ class ElasticOutputStage(AbstractUsageStatsPipelineStage):
             
             "date" : { "type" : "date" },
             
-            "year" : { "type" : "long" },
-            "month" : { "type" : "long" },
-            "day" : { "type" : "long" },
+            "y" : { "type" : "long" },
+            "m" : { "type" : "long" },
+            "d" : { "type" : "long" },
     
             "identifier" : { "type" : "text" },
-            "identifier_prefix" : { "type" : "text" },
+            
+            # this propertires are added dynamically based on the actions in the configuration
+            #"v" : { "type" : "long" },
+            #"d" : { "type" : "long" },
+            #"c" : { "type" : "long" },
+            #"o" : { "type" : "long"},
 
-            "views" :       { "type" : "long" },
-            "downloads" :   { "type" : "long" },
-            "conversions" : { "type" : "long" },
-            "outlinks" :    { "type" : "long"},
-
-            "stats_by_country" : {
-                "properties" : {
-                    "country" :     { "type" : "keyword" },
-                    "views" :       { "type" : "long" },
-                    "downloads" :   { "type" : "long" },
-                    "conversions" : { "type" : "long" },
-                    "outlinks" :    { "type" : "long"}        
+            #"stats_by_country" : {
+            #    "properties" : {
+                    #"co" :{ "type" : "keyword" },
+                    #"v" : { "type" : "long" },
+                    #"d" : { "type" : "long" },
+                    #"c" : { "type" : "long" },
+                    #"o" : { "type" : "long"}        
                 }
-            }
-        }
+            #}
+           #}
     }
 
     def _build_stats(self, obj, stats):
-        obj.update([(action, stats[action]) for action in self.actions])
+        obj.update([(action[0], stats[action]) for action in self.actions])
         return obj
 
 
@@ -57,12 +57,30 @@ class ElasticOutputStage(AbstractUsageStatsPipelineStage):
         self.STATS_BY_COUNTRY_LABEL = configContext.getLabel('STATS_BY_COUNTRY')
 
 
+        # instantiate the MAPPING dictionary
+
+        # create the properties dict for the stats by country  
+        self.MAPPING['properties'][self.STATS_BY_COUNTRY_LABEL]['properties'] = {}
+
+        # add the country label (2 letter)  to the stats by country properties
+        self.MAPPING['properties'][self.STATS_BY_COUNTRY_LABEL]['properties'][self.COUNTRY_LABEL[0:2]] = { "type" : "keyword" }
+        
+        # for each action, add a property (1 letter) to the MAPPING dictionary at the root level and to the stats by country
+        for action in self.actions:
+            self.MAPPING['properties'][action[0]] = { "type" : "long" }
+            self.MAPPING['properties'][self.STATS_BY_COUNTRY_LABEL]['properties'][action[0]] = { "type" : "long" }
+
+
+
+
+
     def run(self, data: UsageStatsData) -> UsageStatsData:
 
 
-        year = self.getCtx().getArg('year')
+        year  = self.getCtx().getArg('year')
         month = self.getCtx().getArg('month')
-        day = self.getCtx().getArg('day')
+        day   = self.getCtx().getArg('day')
+        
         if day is None:
             day = 1
 
@@ -79,15 +97,15 @@ class ElasticOutputStage(AbstractUsageStatsPipelineStage):
   
               'identifier': identifier, 
 
-              self.STATS_BY_COUNTRY_LABEL: [ self._build_stats({ self.COUNTRY_LABEL: country }, country_data)
+              self.STATS_BY_COUNTRY_LABEL: [ self._build_stats({ self.COUNTRY_LABEL[0:2]: country }, country_data)
                                        for country, country_data in data[ self.STATS_BY_COUNTRY_LABEL ].items() ], 
                                    
               'date': datetime.datetime(year, month, day),
               
               'idsite': idsite,
-              'year': year,
-              'month': month,
-              'day': day,
+              'y': year,
+              'm': month,
+              'd': day,
 
             }, data)
             for identifier, data in data.agg_dict.items()
