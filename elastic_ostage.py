@@ -15,9 +15,9 @@ class ElasticOutputStage(AbstractUsageStatsPipelineStage):
             
             "date" : { "type" : "date" },
             
-            "y" : { "type" : "long" },
-            "m" : { "type" : "long" },
-            "d" : { "type" : "long" },
+            "year" : { "type" : "long" },
+            "month" : { "type" : "long" },
+            "day" : { "type" : "long" },
     
             "identifier" : { "type" : "text" },
             
@@ -105,9 +105,9 @@ class ElasticOutputStage(AbstractUsageStatsPipelineStage):
               'date': datetime.datetime(year, month, day),
               
               'idsite': idsite,
-              'y': year,
-              'm': month,
-              'd': day,
+              'year': year,
+              'month': month,
+              'day': day,
 
             }, data)
             for identifier, data in data.agg_dict.items()
