@@ -40,7 +40,7 @@ class ElasticOutputStage(AbstractUsageStatsPipelineStage):
     }
 
     def _build_stats(self, obj, stats):
-        obj.update([(action[0], stats[action]) for action in self.actions])
+        obj.update([(action, stats[action]) for action in self.actions])
         return obj
 
 
@@ -65,12 +65,12 @@ class ElasticOutputStage(AbstractUsageStatsPipelineStage):
         self.MAPPING['properties'][self.STATS_BY_COUNTRY_LABEL]['properties'] = {}
 
         # add the country label (2 letter)  to the stats by country properties
-        self.MAPPING['properties'][self.STATS_BY_COUNTRY_LABEL]['properties'][self.COUNTRY_LABEL[0:2]] = { "type" : "keyword" }
+        self.MAPPING['properties'][self.STATS_BY_COUNTRY_LABEL]['properties'][self.COUNTRY_LABEL] = { "type" : "keyword" }
         
         # for each action, add a property (1 letter) to the MAPPING dictionary at the root level and to the stats by country
         for action in self.actions:
-            self.MAPPING['properties'][action[0]] = { "type" : "long" }
-            self.MAPPING['properties'][self.STATS_BY_COUNTRY_LABEL]['properties'][action[0]] = { "type" : "long" }
+            self.MAPPING['properties'][action] = { "type" : "long" }
+            self.MAPPING['properties'][self.STATS_BY_COUNTRY_LABEL]['properties'][action] = { "type" : "long" }
 
 
 
@@ -99,7 +99,7 @@ class ElasticOutputStage(AbstractUsageStatsPipelineStage):
   
               'identifier': identifier, 
 
-              self.STATS_BY_COUNTRY_LABEL: [ self._build_stats({ self.COUNTRY_LABEL[0:2]: country }, country_data)
+              self.STATS_BY_COUNTRY_LABEL: [ self._build_stats({ self.COUNTRY_LABEL: country }, country_data)
                                        for country, country_data in data[ self.STATS_BY_COUNTRY_LABEL ].items() ], 
                                    
               'date': datetime.datetime(year, month, day),
