@@ -1,15 +1,6 @@
 #!/bin/bash
 
-# Usage: ./load_year.sh -s <idsite> -y <year>
-
-while getopts "s:y:" opt; do
-  case $opt in
-#!/bin/bash
-
 # Usage: ./load_year.sh -s <idsite> -y <year> -t <type>
-
-type="R"
-
 while getopts "s:y:t:" opt; do
   case $opt in
     s)
