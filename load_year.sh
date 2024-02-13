@@ -23,5 +23,5 @@ if [[ -z $idsite || -z $year ]]; then
 fi
 
 for month in {1..12}; do
-  python s3parket2elastic.py -s $idsite -y $year -m $month
+  python3.10 s3parquet2elastic.py -s $idsite -y $year -m $month
 done
