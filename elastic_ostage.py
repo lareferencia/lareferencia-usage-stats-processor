@@ -18,6 +18,8 @@ class ElasticOutputStage(AbstractUsageStatsPipelineStage):
             "year" : { "type" : "long" },
             "month" : { "type" : "long" },
             "day" : { "type" : "long" },
+
+            "level" : { "type" : "keyword" },
     
             "identifier" : { "type" : "text" },
             
@@ -56,6 +58,8 @@ class ElasticOutputStage(AbstractUsageStatsPipelineStage):
         self.COUNTRY_LABEL = configContext.getLabel('COUNTRY')
         self.STATS_BY_COUNTRY_LABEL = configContext.getLabel('STATS_BY_COUNTRY')
 
+        self.level = configContext.getArg('type')
+
 
         # instantiate the MAPPING dictionary
 
@@ -73,11 +77,7 @@ class ElasticOutputStage(AbstractUsageStatsPipelineStage):
             self.MAPPING['properties'][self.STATS_BY_COUNTRY_LABEL]['properties'][action] = { "type" : "long" }
 
 
-
-
-
     def run(self, data: UsageStatsData) -> UsageStatsData:
-
 
         year  = self.getCtx().getArg('year')
         month = self.getCtx().getArg('month')
@@ -108,6 +108,7 @@ class ElasticOutputStage(AbstractUsageStatsPipelineStage):
               'year': year,
               'month': month,
               'day': day,
+              'level': self.level
 
             }, data)
             for identifier, data in data.agg_dict.items()
