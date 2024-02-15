@@ -45,7 +45,7 @@ class ConfigurationContext:
    
    def getConfig(self, section=None, option=None):
 
-      print("Get config %s %s" % (section, option))
+      #print("Get config %s %s" % (section, option))
 
       if section not in self._config.sections():
          raise Exception("Section %s not found" % section)
