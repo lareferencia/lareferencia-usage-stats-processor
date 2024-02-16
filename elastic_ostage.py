@@ -22,23 +22,7 @@ class ElasticOutputStage(AbstractUsageStatsPipelineStage):
             "level" : { "type" : "keyword" },
     
             "identifier" : { "type" : "text" },
-            
-            # this propertires are added dynamically based on the actions in the configuration
-            #"v" : { "type" : "long" },
-            #"d" : { "type" : "long" },
-            #"c" : { "type" : "long" },
-            #"o" : { "type" : "long"},
-
-            #"stats_by_country" : {
-            #    "properties" : {
-                    #"co" :{ "type" : "keyword" },
-                    #"v" : { "type" : "long" },
-                    #"d" : { "type" : "long" },
-                    #"c" : { "type" : "long" },
-                    #"o" : { "type" : "long"}        
-                }
-            #}
-           #}
+        }
     }
 
     def _build_stats(self, obj, stats):
@@ -139,7 +123,7 @@ class ElasticOutputStage(AbstractUsageStatsPipelineStage):
             index=index_name,
             documents=data.documents,
             id_keys=["id"],
-            bulk_size=1000
+            bulk_size=10000
         )
                 
         return data
