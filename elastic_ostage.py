@@ -18,25 +18,27 @@ class ElasticOutputStage(AbstractUsageStatsPipelineStage):
             "year" : { "type" : "long" },
             "month" : { "type" : "long" },
             "day" : { "type" : "long" },
+
+            "level" : { "type" : "keyword" },
     
             "identifier" : { "type" : "text" },
-            "identifier_prefix" : { "type" : "text" },
+            
+            # this propertires are added dynamically based on the actions in the configuration
+            #"v" : { "type" : "long" },
+            #"d" : { "type" : "long" },
+            #"c" : { "type" : "long" },
+            #"o" : { "type" : "long"},
 
-            "views" :       { "type" : "long" },
-            "downloads" :   { "type" : "long" },
-            "conversions" : { "type" : "long" },
-            "outlinks" :    { "type" : "long"},
-
-            "stats_by_country" : {
-                "properties" : {
-                    "country" :     { "type" : "keyword" },
-                    "views" :       { "type" : "long" },
-                    "downloads" :   { "type" : "long" },
-                    "conversions" : { "type" : "long" },
-                    "outlinks" :    { "type" : "long"}        
+            #"stats_by_country" : {
+            #    "properties" : {
+                    #"co" :{ "type" : "keyword" },
+                    #"v" : { "type" : "long" },
+                    #"d" : { "type" : "long" },
+                    #"c" : { "type" : "long" },
+                    #"o" : { "type" : "long"}        
                 }
-            }
-        }
+            #}
+           #}
     }
 
     def _build_stats(self, obj, stats):
@@ -56,13 +58,31 @@ class ElasticOutputStage(AbstractUsageStatsPipelineStage):
         self.COUNTRY_LABEL = configContext.getLabel('COUNTRY')
         self.STATS_BY_COUNTRY_LABEL = configContext.getLabel('STATS_BY_COUNTRY')
 
+        self.level = configContext.getArg('type')
+
+
+        # instantiate the MAPPING dictionary
+
+
+        # create the properties dict for the stats by country  
+        self.MAPPING['properties'][self.STATS_BY_COUNTRY_LABEL] = {}
+        self.MAPPING['properties'][self.STATS_BY_COUNTRY_LABEL]['properties'] = {}
+
+        # add the country label (2 letter)  to the stats by country properties
+        self.MAPPING['properties'][self.STATS_BY_COUNTRY_LABEL]['properties'][self.COUNTRY_LABEL] = { "type" : "keyword" }
+        
+        # for each action, add a property (1 letter) to the MAPPING dictionary at the root level and to the stats by country
+        for action in self.actions:
+            self.MAPPING['properties'][action] = { "type" : "long" }
+            self.MAPPING['properties'][self.STATS_BY_COUNTRY_LABEL]['properties'][action] = { "type" : "long" }
+
 
     def run(self, data: UsageStatsData) -> UsageStatsData:
 
-
-        year = self.getCtx().getArg('year')
+        year  = self.getCtx().getArg('year')
         month = self.getCtx().getArg('month')
-        day = self.getCtx().getArg('day')
+        day   = self.getCtx().getArg('day')
+        
         if day is None:
             day = 1
 
@@ -88,6 +108,7 @@ class ElasticOutputStage(AbstractUsageStatsPipelineStage):
               'year': year,
               'month': month,
               'day': day,
+              'level': self.level
 
             }, data)
             for identifier, data in data.agg_dict.items()

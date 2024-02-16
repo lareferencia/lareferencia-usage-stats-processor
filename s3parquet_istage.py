@@ -59,8 +59,6 @@ class S3ParquetInputStage(AbstractUsageStatsPipelineStage):
 
         # set the custom_var column name based on the type
         identifier_custom_var = 'custom_var_v1' if type == 'R' else 'custom_var_v6'
-        print(identifier_custom_var)
-        print(type)
 
         # read the events file       
         data.events_df  = S3ParquetInputStage._read_parquet_file( self.s3_bucket + self.events_path, 

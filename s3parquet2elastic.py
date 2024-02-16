@@ -53,7 +53,8 @@ if __name__ == "__main__":
     start_time = time.time()
 
     # parse arguments
-    args = vars(parse_args())     
+    args = vars(parse_args())
+    print("Arguments: ", args )     
     
     # run the main function
     main(args)
