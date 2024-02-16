@@ -34,9 +34,8 @@ class MetricsFilterStage(AbstractUsageStatsPipelineStage):
         data.events_df = data.events_df.merge(data.visits_df, on='idvisit')
         
         # create a new column called conversions that is 1 if the views and downloads columns are 1, 0 otherwise
-        data.events_df['conversions'] = ((data.events_df['views'] == 1) & ((data.events_df['downloads'] == 1 | (data.events_df['outlinks'] == 1)))  ).astype(int)
-
-            
+        data.events_df['conversions'] = ( (data.events_df['views'] == 1) & ( ( (data.events_df['downloads'] == 1) | (data.events_df['outlinks'] == 1)))).astype(int)
+        
         return data       
 
 

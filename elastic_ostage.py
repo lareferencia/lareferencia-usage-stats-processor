@@ -120,6 +120,5 @@ class ElasticOutputStage(AbstractUsageStatsPipelineStage):
             id_keys=["id"],
             bulk_size=1000
         )
-        
-    
+                
         return data
