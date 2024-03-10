@@ -1,0 +1,6 @@
+opensearch-py
+awswrangler
+awswrangler[opensearch]
+pandas
+PyMySQL==1.0.2
+

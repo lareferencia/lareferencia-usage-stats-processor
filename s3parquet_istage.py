@@ -10,9 +10,8 @@ class S3ParquetInputStage(AbstractUsageStatsPipelineStage):
         super().__init__(configContext)
 
         # get the s3 bucket and type of parquet from the configuration
-        self.s3_bucket = configContext.getConfig('INPUT', 'S3_BUCKET')
-        self.visits_path = configContext.getConfig('INPUT', 'VISITS_PATH')
-        self.events_path = configContext.getConfig('INPUT', 'EVENTS_PATH')
+        self.visits_path = configContext.getConfig('S3_STATS', 'VISITS_PATH')
+        self.events_path = configContext.getConfig('S3_STATS', 'EVENTS_PATH')
 
         # get the labels from the configuration
         self.COUNTRY_LABEL = configContext.getLabel('COUNTRY')
@@ -61,7 +60,7 @@ class S3ParquetInputStage(AbstractUsageStatsPipelineStage):
         identifier_custom_var = 'custom_var_v1' if type == 'R' else 'custom_var_v6'
 
         # read the events file       
-        data.events_df  = S3ParquetInputStage._read_parquet_file( self.s3_bucket + self.events_path, 
+        data.events_df  = S3ParquetInputStage._read_parquet_file( self.events_path, 
             ['idlink_va', 'idvisit','server_time', identifier_custom_var, 'action_type', 'action_url', 'action_url_prefix'],
             partition_filter )
         
@@ -69,7 +68,7 @@ class S3ParquetInputStage(AbstractUsageStatsPipelineStage):
         data.events_df = data.events_df.rename(columns={ identifier_custom_var: self.OAI_IDENTIFIER_LABEL })
 
         # read the visits file
-        data.visits_df = S3ParquetInputStage._read_parquet_file ( self.s3_bucket + self.visits_path, 
+        data.visits_df = S3ParquetInputStage._read_parquet_file ( self.visits_path, 
             ['idvisit', 'visit_last_action_time', 'visit_first_action_time', 'visit_total_actions', 'location_country'],
             partition_filter )
         
