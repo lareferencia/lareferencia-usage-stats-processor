@@ -72,20 +72,30 @@ def main(args_dict):
     # get data from mysql
     # if day is not specified, throw error
     if day is None:
-        raise ValueError("day must be specified")
+        #calculate the last day of the month
+        last_day = monthrange(year, month)[1]
+       
+        visit_query = """SELECT * FROM matomo_log_visit WHERE idvisit in 
+                        (SELECT idvisit FROM matomo_log_link_visit_action WHERE idsite = {3} and server_time BETWEEN '{0:04d}-{1:02d}-01 00:00:00.000' AND '{0:04d}-{1:02d}-{2:02d} 23:59:59.999')
+                        """.format(year,month,last_day,site)
         
-    visit_query = "SELECT * FROM matomo_log_visit WHERE idvisit in (SELECT idvisit FROM matomo_log_link_visit_action WHERE idsite = {3} and server_time BETWEEN '{0:04d}-{1:02d}-{2:02d} 00:00:00' AND '{0:04d}-{1:02d}-{2:02d} 23:59:59')".format(year,month,day,site)
-    event_query = """SELECT va.*, a.`type` as action_type, a.name  as action_url, a.url_prefix as action_url_prefix
-                        FROM (matomo_log_link_visit_action va left join matomo_log_action a on (va.idaction_url = a.idaction)) 
-                        WHERE idsite = {3} and server_time BETWEEN '{0:04d}-{1:02d}-{2:02d} 00:00:00.000' AND '{0:04d}-{1:02d}-{2:02d} 23:59:59.999' AND NOT RIGHT(a.name,8) = '.pdf.jpg'
-                    """.format(year,month,day,site) 
+        event_query = """SELECT va.*, a.`type` as action_type, a.name  as action_url, a.url_prefix as action_url_prefix
+                            FROM (matomo_log_link_visit_action va left join matomo_log_action a on (va.idaction_url = a.idaction)) 
+                            WHERE idsite = {3} and server_time BETWEEN '{0:04d}-{1:02d}-01 00:00:00.000' AND '{0:04d}-{1:02d}-{2:02d} 23:59:59.999' AND NOT RIGHT(a.name,8) = '.pdf.jpg'
+                        """.format(year,month,last_day,site) 
+    else:
+        visit_query = "SELECT * FROM matomo_log_visit WHERE idsite = {3} and visit_last_action_time BETWEEN '{0:04d}-{1:02d}-{2:02d} 00:00:00' AND '{0:04d}-{1:02d}-{2:02d} 23:59:59'".format(year,month,day,site)
+        event_query = """SELECT va.*, a.`type` as action_type, a.name  as action_url, a.url_prefix as action_url_prefix
+                            FROM (matomo_log_link_visit_action va left join matomo_log_action a on (va.idaction_url = a.idaction)) 
+                            WHERE idsite = {3} and server_time BETWEEN '{0:04d}-{1:02d}-{2:02d} 00:00:00.000' AND '{0:04d}-{1:02d}-{2:02d} 23:59:59.999' AND NOT RIGHT(a.name,8) = '.pdf.jpg'
+                        """.format(year,month,day,site)
 
     
     # read visit data
-    #print(visit_query)
+    print(visit_query)
     visit_df = wr.mysql.read_sql_query(sql=visit_query,con=conn)
     
-    #print(event_query)
+    print(event_query)
     event_df = wr.mysql.read_sql_query(sql=event_query,con=conn)
 
     if visit_df.empty:
@@ -99,22 +109,26 @@ def main(args_dict):
         event_df['day']   = event_df['server_time'].dt.day
         event_df['month'] = event_df['server_time'].dt.month
         event_df['year']  = event_df['server_time'].dt.year
-
         
         # write to s3
         if not dry_run:
+
+            partition_cols = ['idsite', 'year', 'month']
+
+            if day is not None:
+                partition_cols.append('day')
 
             res_visit = wr.s3.to_parquet(
                     df=visit_df,
                     path='s3://' + s3_visits_bucket,
                     dataset=True,
-                    partition_cols=['idsite', 'year', 'month', 'day'],)
+                    partition_cols=partition_cols)
             
             res_event = wr.s3.to_parquet(
                     df=event_df,
                     path='s3://' + s3_events_bucket,
                     dataset=True,
-                    partition_cols=['idsite', 'year', 'month', 'day'],)
+                    partition_cols=partition_cols)
                     
 
         else:
@@ -163,7 +177,7 @@ def parse_args():
                         default=None,
                         type=int,
                         help="day",
-                        required=True)
+                        required=False)
     
     parser.add_argument("-t",
                         "--type", 
