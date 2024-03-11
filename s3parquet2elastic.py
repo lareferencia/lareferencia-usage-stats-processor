@@ -20,7 +20,8 @@ def main(args):
                                        [ "robots_fstage.RobotsFilterStage",
                                         "assets_fstage.AssetsFilterStage",
                                         "metrics_fstage.MetricsFilterStage",
-                                        "aggbyitem_fstage.AggByItemFilterStage" ],
+                                        "aggbyitem_fstage.AggByItemFilterStage",
+                                        "identifier_fstage.py.IdentifierFilterStage",],
                                        
                                         "elastic_ostage.ElasticOutputStage")
         pipeline.run()
