@@ -190,7 +190,7 @@ def main(args_dict):
 
 def parse_args():
 
-    parser = argparse.ArgumentParser(description="Usage Statistics - S3 parquet datasets 2 elastic", usage="python3 matomo2s3.py -s <site> -y <year> --from_month <month> --to_month <month> --from_day <day> --to_day <day>")
+    parser = argparse.ArgumentParser(description="Usage Statistics Process Batch Runner", usage='python3 runner.py --process="<somecode.py>" -s <site> -y <year> --from_month <month> --to_month <month> --from_day <day> --to_day <day>')
 
     parser.add_argument("--loglevel", 
                         help="Log level", 
@@ -242,12 +242,6 @@ def parse_args():
                         type=int,
                         help="to day",
                         required=False)
-
-    parser.add_argument("--by_month", 
-                        default=False, 
-                        type=bool,
-                        required=False, 
-                        help="process by month")
 
     parser.add_argument("--date", type=str, default=None, help="date to process", required=False)   
 
