@@ -102,7 +102,11 @@ def main(args_dict):
         s3logger.logwarning("No data for site: %s year: %s month: %s day: %s" % (site, year, month, day))
     else:
         # extract day, month and year from datetime
-        visit_df['day']   = day 
+        if day is None:
+            visit_df['day']   = 1
+        else:
+            visit_df['day']   = day
+            
         visit_df['month'] = month 
         visit_df['year']  = year 
 
