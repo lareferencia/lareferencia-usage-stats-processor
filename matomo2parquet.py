@@ -92,10 +92,10 @@ def main(args_dict):
 
     
     # read visit data
-    print(visit_query)
+    #print(visit_query)
     visit_df = wr.mysql.read_sql_query(sql=visit_query,con=conn)
     
-    print(event_query)
+    #print(event_query)
     event_df = wr.mysql.read_sql_query(sql=event_query,con=conn)
 
     if visit_df.empty:
@@ -106,7 +106,7 @@ def main(args_dict):
             visit_df['day']   = 1
         else:
             visit_df['day']   = day
-            
+
         visit_df['month'] = month 
         visit_df['year']  = year 
 
