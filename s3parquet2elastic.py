@@ -3,9 +3,7 @@ from configcontext import ConfigurationContext
 import time
 import argparse
 import datetime
-
-
-
+import stages
 
 
 def main(args):
@@ -15,16 +13,16 @@ def main(args):
     
     try:
         pipeline = UsageStatsProcessorPipeline(config_context, 
-                                       "s3parquet_istage.S3ParquetInputStage",
+                                       "stages.S3ParquetInputStage",
                                         
-                                       [ "robots_fstage.RobotsFilterStage",
-                                        "assets_fstage.AssetsFilterStage",
-                                        "metrics_fstage.MetricsFilterStage",
-                                        "aggbyitem_fstage.AggByItemFilterStage",
-                                       # "identifier_fstage.py.IdentifierFilterStage",
+                                       ["stages.RobotsFilterStage",
+                                        "stages.AssetsFilterStage",
+                                        "stages.MetricsFilterStage",
+                                        "stages.AggByItemFilterStage",
+                                        "stages.IdentifierFilterStage",
                                        ],
                                        
-                                        "elastic_ostage.ElasticOutputStage")
+                                        "stages.ElasticOutputStage")
         pipeline.run()
         
     except Exception as e:
@@ -40,8 +38,6 @@ def parse_args():
     parser.add_argument( "-c", "--config_file_path", default='config.ini', help="config file", required=False )
     parser.add_argument( "-s", "--site", default=48, help="site id", required=False)
    
-    parser.add_argument( "-t", "--type", default='R', type=str, help="(R|L|N)", required=False )
-
     parser.add_argument( "-y", "--year", default=2023, type=int, help="yyyy", required=False )
     parser.add_argument("-m", "--month", default=1, type=int, help="m", required=False)
     parser.add_argument("-d", "--day", default=None, type=int, help="d", required=False)

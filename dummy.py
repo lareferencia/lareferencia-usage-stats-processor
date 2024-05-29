@@ -19,9 +19,6 @@ def parse_args():
     #cambiar config.tst.ini por config.ini luego
     parser.add_argument( "-c", "--config_file_path", default='config.tst.ini', help="config file", required=False )
     parser.add_argument( "-s", "--site", default=48, help="site id", required=False)
-   
-    parser.add_argument( "-t", "--type", default='R', type=str, help="(R|L|N)", required=False )
-
     parser.add_argument( "-y", "--year", default=2023, type=int, help="yyyy", required=False )
     parser.add_argument("-m", "--month", default=1, type=int, help="m", required=False)
     parser.add_argument("-d", "--day", default=None, type=int, help="d", required=False)

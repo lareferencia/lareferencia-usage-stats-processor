@@ -16,15 +16,12 @@ from config import read_ini
 import atexit
 from s3logger import S3Logger 
 
-from sqlalchemy import create_engine, MetaData
-from sqlalchemy.orm import Session
-
-from lareferenciastatsdb.models import Source
+from lareferenciastatsdb import UsageStatsDatabaseHelper
 
 import subprocess
 
 
-def process_site(command, configfile,  site_id, year, month, day, type=None):
+def process_site(command, configfile,  site_id, year, month, day, type):
     print("Processing %s site: %s year: %s month: %s day: %s" % (command, site_id, year, month, day))
 
      # Iniciar la lista de comandos con el comando en sí
@@ -44,6 +41,7 @@ def process_site(command, configfile,  site_id, year, month, day, type=None):
         cmd_list.append("--day=" + str(day))
     if type is not None:
         cmd_list.append("--type=" + str(type))
+
 
     # Ejecutar el comando
     command = " ".join(cmd_list)    
@@ -87,19 +85,9 @@ def main(args_dict):
         # read config file
         config = read_ini(config_file_path)
 
-        database_connection_str = config["USAGE_STATS_DB"]["SQLALCHEMY_DATABASE_URI"] 
-
-        # database
-        engine = create_engine(database_connection_str)
-        connection = engine.connect()
-        metadata = MetaData()
-
-        sources_dict = {}
-        with Session(engine) as session:
-            sources = session.query(Source).all()
-            for source in sources:
-                sources_dict[source.site_id] = source    
-
+        # database helper
+        dbhelper = UsageStatsDatabaseHelper(config)
+        
         # logger bucket
         #s3logger.set_bucket(config["S3"]["LOGS_BUCKET"])
 
@@ -116,7 +104,7 @@ def main(args_dict):
 
     # sites list 
     if site == 'all':
-        sites = list(sources_dict.keys())
+        sites = list(dbhelper.get_all_site_ids())
         sites.sort()
 
         # exclude sites
@@ -131,7 +119,8 @@ def main(args_dict):
     # # loop over sites
     for site_id in sites:
 
-        type = sources_dict[site_id].type
+        source = dbhelper.get_source_by_site_id(site_id)
+
 
          # if date is specified, get only that day
         if ( date != None ):
@@ -141,7 +130,7 @@ def main(args_dict):
             month = int(date[5:7])
             day = int(date[8:10])
 
-            process_site(command, config_file_path, site_id, year, month, day, type)
+            process_site(command, config_file_path, site_id, year, month, day, source.type)
 
         
         # if not specified date, get data for all days coverd by from_month and to_month
@@ -160,7 +149,7 @@ def main(args_dict):
 
                 ## if from_day is not specified, process all month
                 if from_day is None:
-                    process_site(command, config_file_path, site_id, year, month, None, type)
+                    process_site(command, config_file_path, site_id, year, month, None, source.type)
 
                 else: # process only from_day to to_day    
 
@@ -172,7 +161,7 @@ def main(args_dict):
 
                     # loop over days
                     for day in range(from_day,local_to_day+1):
-                        process_site(command, config_file_path, site_id, year, month, day, type)
+                        process_site(command, config_file_path, site_id, year, month, day, source.type)
 
              
 

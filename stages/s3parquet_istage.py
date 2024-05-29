@@ -2,6 +2,7 @@ from processorpipeline import AbstractUsageStatsPipelineStage, UsageStatsData
 from configcontext import ConfigurationContext
 import pandas as pd
 import awswrangler as wr
+from lareferenciastatsdb import get_source_by_site_id
 
 
 class S3ParquetInputStage(AbstractUsageStatsPipelineStage):
@@ -16,6 +17,9 @@ class S3ParquetInputStage(AbstractUsageStatsPipelineStage):
         # get the labels from the configuration
         self.COUNTRY_LABEL = configContext.getLabel('COUNTRY')
         self.OAI_IDENTIFIER_LABEL = configContext.getLabel('OAI_IDENTIFIER')
+
+        self.usage_stats_db_uri = configContext.getConfig('USAGE_STATS_DB','SQLALCHEMY_DATABASE_URI')
+
 
     def _partition_filter(idsite, year, month, day):
         
@@ -52,7 +56,16 @@ class S3ParquetInputStage(AbstractUsageStatsPipelineStage):
         month = self.getCtx().getArg('month')
         day = self.getCtx().getArg('day')
         idsite = self.getCtx().getArg('site')
-        type = self.getCtx().getArg('type')
+
+        source = get_source_by_site_id(self.usage_stats_db_uri, idsite)
+
+        if source is None:
+            raise Exception("Site not found in database: %s" % idsite)
+
+        ## add the source to the data object
+        data.source = source
+
+        type = source.type
 
         partition_filter = S3ParquetInputStage._partition_filter(idsite, year, month, day)
 
