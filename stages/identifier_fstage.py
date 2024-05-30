@@ -71,7 +71,7 @@ class IdentifierFilterStage(AbstractUsageStatsPipelineStage):
             # if the identifier has changed, update the dictionary
             if new_identifier != old_identifier:
                 data.agg_dict[new_identifier] = data.agg_dict.pop(old_identifier)
-                file.write(old_identifier + " --> " + new_identifier + "\n")
+                file.write(old_identifier + " --> " + str(new_identifier) + "\n")
                 
 
 
