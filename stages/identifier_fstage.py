@@ -23,6 +23,10 @@ class IdentifierFilterStage(AbstractUsageStatsPipelineStage):
         identifier_map_type = data.source.identifier_map_type
         identifier_prefix = data.source.identifier_prefix
 
+        ## write a file with the changed identifiers
+        file = open("identifiers.txt", "a") 
+
+
         
         # if the identifier map type is map from file, read the file
         if identifier_map_type == IdentifierFilterStage.IDENTIFIER_MAP_FROM_FILE:
@@ -67,6 +71,8 @@ class IdentifierFilterStage(AbstractUsageStatsPipelineStage):
             # if the identifier has changed, update the dictionary
             if new_identifier != old_identifier:
                 data.agg_dict[new_identifier] = data.agg_dict.pop(old_identifier)
+                file.write(old_identifier + " --> " + new_identifier + "\n")
+                
 
 
         print("Normalized identifiers:", len(data.agg_dict.keys()))
