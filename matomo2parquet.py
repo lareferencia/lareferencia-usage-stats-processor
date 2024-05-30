@@ -16,6 +16,7 @@ import datetime
 
 from config import read_ini
 
+import xxhash
 import atexit
 from s3logger import S3Logger 
 

@@ -5,6 +5,7 @@ import logging
 logger = logging.getLogger()
 
 import configparser
+from lareferenciastatsdb import UsageStatsDatabaseHelper
 
 GENERAL = 'GENERAL'
 LABELS = 'LABELS'
@@ -42,7 +43,13 @@ class ConfigurationContext:
          logger.error("No GENERAL section in configuration file")
          raise Exception("No GENERAL section in configuration file")
       
+      self.dbhelper = UsageStatsDatabaseHelper(self._config)
+      
    
+
+   def getDBHelper(self):
+      return self.dbhelper
+
    def getConfig(self, section=None, option=None):
 
       #print("Get config %s %s" % (section, option))

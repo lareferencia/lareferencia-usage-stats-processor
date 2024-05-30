@@ -3,6 +3,8 @@ from configcontext import ConfigurationContext
 import awswrangler as wr
 import sys
 import datetime
+import xxhash
+
 
 
 class ElasticOutputStage(AbstractUsageStatsPipelineStage):
@@ -79,7 +81,7 @@ class ElasticOutputStage(AbstractUsageStatsPipelineStage):
         data.documents = [
             self._build_stats( 
             {
-              'id': '%s-%s-%s-%s' % (identifier, year, month, day),
+              'id': xxhash.xxh64( '%s-%s-%s-%s-%s' % (idsite, identifier, year, month, day)  ).hexdigest(),
   
               'identifier': identifier, 
 

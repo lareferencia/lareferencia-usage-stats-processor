@@ -5,6 +5,8 @@ import argparse
 import datetime
 import stages
 
+import pymysql
+pymysql.install_as_MySQLdb()
 
 def main(args):
    
@@ -27,7 +29,9 @@ def main(args):
         
     except Exception as e:
         print("Error: %s" % e)
-        # print traceback of e
+        ## print trace
+        import traceback
+        traceback.print_exc()
         
     
 
@@ -41,6 +45,13 @@ def parse_args():
     parser.add_argument( "-y", "--year", default=2023, type=int, help="yyyy", required=False )
     parser.add_argument("-m", "--month", default=1, type=int, help="m", required=False)
     parser.add_argument("-d", "--day", default=None, type=int, help="d", required=False)
+
+    parser.add_argument("-t",
+                    "--type", 
+                    default='R', 
+                    type=str, 
+                    help="(R|L|N)", 
+                    required=False)
    
     args = parser.parse_args()
     return args
