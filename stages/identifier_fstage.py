@@ -23,6 +23,7 @@ class IdentifierFilterStage(AbstractUsageStatsPipelineStage):
         identifier_map_type = data.source.identifier_map_type
         identifier_prefix = data.source.identifier_prefix
 
+        
         # if the identifier map type is map from file, read the file
         if identifier_map_type == IdentifierFilterStage.IDENTIFIER_MAP_FROM_FILE:
             if identifier_map_filename is None or identifier_map_filename.strip() == '':
@@ -44,6 +45,8 @@ class IdentifierFilterStage(AbstractUsageStatsPipelineStage):
             except:
                 raise ValueError("Invalid regex %s" % identifier_map_regex)
 
+        print("Identifiers:", len(data.agg_dict.keys()))
+
         # for every identifier in the data
         for old_identifier in list(data.agg_dict.keys()):
 
@@ -59,9 +62,14 @@ class IdentifierFilterStage(AbstractUsageStatsPipelineStage):
                 if old_identifier in dict_to_search:
                     new_identifier = dict_to_search[old_identifier]
 
+            #print(old_identifier, " --> " ,new_identifier)
+
             # if the identifier has changed, update the dictionary
             if new_identifier != old_identifier:
                 data.agg_dict[new_identifier] = data.agg_dict.pop(old_identifier)
+
+
+        print("Normalized identifiers:", len(data.agg_dict.keys()))
 
 
         return data       
