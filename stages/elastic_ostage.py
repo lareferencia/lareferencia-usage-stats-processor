@@ -5,8 +5,6 @@ import sys
 import datetime
 import xxhash
 
-
-
 class ElasticOutputStage(AbstractUsageStatsPipelineStage):
 
     MAPPING = {
@@ -65,6 +63,8 @@ class ElasticOutputStage(AbstractUsageStatsPipelineStage):
 
     def run(self, data: UsageStatsData) -> UsageStatsData:
 
+        helper = self.getCtx().getDBHelper()
+
         year  = self.getCtx().getArg('year')
         month = self.getCtx().getArg('month')
         day   = self.getCtx().getArg('day')
@@ -75,7 +75,7 @@ class ElasticOutputStage(AbstractUsageStatsPipelineStage):
         idsite = self.getCtx().getArg('site')
 
         # create the index name
-        index_name = '%s-%s-%s' % (self.index_prefix, idsite, year)
+        index_name = helper.get_index_name(self.index_prefix, idsite, year)
 
          # transform dict_df into a list of documents, converting the dictionary into a list of documents and          
         data.documents = [
