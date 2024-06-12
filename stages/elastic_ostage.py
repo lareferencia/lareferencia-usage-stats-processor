@@ -114,7 +114,13 @@ class ElasticOutputStage(AbstractUsageStatsPipelineStage):
             index = wr.opensearch.create_index(
                 client=opensearch,
                 mappings=self.MAPPING,
-                index=index_name )
+                 settings={
+                    "index": {
+                        "number_of_shards": 1,
+                        "number_of_replicas": 1
+                    }
+                },
+                index=index_name,  )
             print ('Index %s created' % (index_name))
         except:
             print ('Index %s already exists' % (index_name))
