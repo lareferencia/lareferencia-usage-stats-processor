@@ -49,7 +49,7 @@ class ElasticOutputStage(AbstractUsageStatsPipelineStage):
 
 
         # create the properties dict for the stats by country  
-        self.MAPPING['properties'][self.STATS_BY_COUNTRY_LABEL] = {}
+        self.MAPPING['properties'][self.STATS_BY_COUNTRY_LABEL] = { "type": "nested" }
         self.MAPPING['properties'][self.STATS_BY_COUNTRY_LABEL]['properties'] = {}
 
         # add the country label (2 letter)  to the stats by country properties
