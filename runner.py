@@ -134,7 +134,7 @@ def main(args_dict):
 
         else:
             # if from_month, to_month, from_day, to_day are None get all data for the year
-            if (from_month is not None and to_month is not None and from_day is not None and to_day is not None):
+            if from_month == 0 and to_month == 0:
                 process_site(command, config_file_path, site_id, year, None, None, source.type)
 
             # if not specified date, get data for all days coverd by from_month and to_month
