@@ -84,6 +84,11 @@ class S3ParquetInputStage(AbstractUsageStatsPipelineStage):
             ['idlink_va', 'idvisit','server_time', identifier_custom_var, 'action_type', 'action_url', 'action_url_prefix'],
             partition_filter )
         
+        if data.events_df is None:
+            data.events_df = pd.DataFrame()
+            # add ['idlink_va', 'idvisit','server_time', identifier_custom_var, 'action_type', 'action_url', 'action_url_prefix'] columns
+            data.events_df = pd.DataFrame(columns=['idlink_va', 'idvisit','server_time', identifier_custom_var, 'action_type', 'action_url', 'action_url_prefix'])
+        
         # rename the custom_var_v1 column to oai_identifier
         data.events_df = data.events_df.rename(columns={ identifier_custom_var: self.OAI_IDENTIFIER_LABEL })
 
@@ -91,6 +96,11 @@ class S3ParquetInputStage(AbstractUsageStatsPipelineStage):
         data.visits_df = S3ParquetInputStage._read_parquet_file ( self.visits_path, 
             ['idvisit', 'visit_last_action_time', 'visit_first_action_time', 'visit_total_actions', 'location_country'],
             partition_filter )
+        
+        if data.visits_df is None:
+            data.visits_df = pd.DataFrame()
+            # add ['idvisit', 'visit_last_action_time', 'visit_first_action_time', 'visit_total_actions', 'location_country'] columns
+            data.visits_df = pd.DataFrame(columns=['idvisit', 'visit_last_action_time', 'visit_first_action_time', 'visit_total_actions', 'location_country'])
         
         # rename the location_country column to country
         data.visits_df = data.visits_df.rename(columns={'location_country': self.COUNTRY_LABEL})
