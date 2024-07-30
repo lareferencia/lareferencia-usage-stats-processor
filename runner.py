@@ -213,13 +213,13 @@ def parse_args():
                         required=False)
 
     parser.add_argument("--from_month",
-                        default=None,
+                        default=1,
                         type=int,
                         help="from month",
                         required=False)
 
     parser.add_argument("--to_month",
-                        default=None,
+                        default=12,
                         type=int,
                         help="to month",
                         required=False)
