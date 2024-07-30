@@ -88,6 +88,8 @@ class S3ParquetInputStage(AbstractUsageStatsPipelineStage):
             data.events_df = pd.DataFrame()
             # add ['idlink_va', 'idvisit','server_time', identifier_custom_var, 'action_type', 'action_url', 'action_url_prefix'] columns
             data.events_df = pd.DataFrame(columns=['idlink_va', 'idvisit','server_time', identifier_custom_var, 'action_type', 'action_url', 'action_url_prefix'])
+            # set server_time to datetime
+            data.events_df['server_time'] = pd.to_datetime(data.events_df['server_time'])
         
         # rename the custom_var_v1 column to oai_identifier
         data.events_df = data.events_df.rename(columns={ identifier_custom_var: self.OAI_IDENTIFIER_LABEL })
