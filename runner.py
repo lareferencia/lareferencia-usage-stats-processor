@@ -132,36 +132,40 @@ def main(args_dict):
 
             process_site(command, config_file_path, site_id, year, month, day, source.type)
 
-        
-        # if not specified date, get data for all days coverd by from_month and to_month
         else:
+            # if from_month, to_month, from_day, to_day are None get all data for the year
+            if (from_month is not None and to_month is not None and from_day is not None and to_day is not None):
+                process_site(command, config_file_path, site_id, year, None, None, source.type)
 
-            # if from_month is not specified, process all months
-            if from_month is None:
-                from_month = 1
-            
-            # if to_month is not specified, process all months
-            if to_month is None:
-                to_month = 12
+            # if not specified date, get data for all days coverd by from_month and to_month
+            else:
 
-            # loop over months
-            for month in range(from_month,to_month+1):
+                # if from_month is not specified, process all months
+                if from_month is None:
+                    from_month = 1
+                
+                # if to_month is not specified, process all months
+                if to_month is None:
+                    to_month = 12
 
-                ## if from_day is not specified, process all month
-                if from_day is None:
-                    process_site(command, config_file_path, site_id, year, month, None, source.type)
+                # loop over months
+                for month in range(from_month,to_month+1):
 
-                else: # process only from_day to to_day    
+                    ## if from_day is not specified, process all month
+                    if from_day is None:
+                        process_site(command, config_file_path, site_id, year, month, None, source.type)
 
-                    # if to_day is not specified and from_data is 1 process all month by passsing None as day
-                    if to_day is None:
-                        local_to_day = monthrange(year,month)[1]
-                    else:
-                        local_to_day = to_day
+                    else: # process only from_day to to_day    
 
-                    # loop over days
-                    for day in range(from_day,local_to_day+1):
-                        process_site(command, config_file_path, site_id, year, month, day, source.type)
+                        # if to_day is not specified and from_data is 1 process all month by passsing None as day
+                        if to_day is None:
+                            local_to_day = monthrange(year,month)[1]
+                        else:
+                            local_to_day = to_day
+
+                        # loop over days
+                        for day in range(from_day,local_to_day+1):
+                            process_site(command, config_file_path, site_id, year, month, day, source.type)
 
              
 

@@ -27,13 +27,18 @@ class S3ParquetInputStage(AbstractUsageStatsPipelineStage):
         
         idsite = str(idsite)
         year = str(year)
-        month = str(month)
     
+        if month is None:
+            return lambda x: (x['idsite'] == idsite) and (x['year'] ==  year )
+
+        month = str(month)
+
         if day is None:
             return lambda x: (x['idsite'] == idsite) and (x['year'] ==  year ) and (x['month'] == month)  
         else:
             day = str(day)
             return lambda x: (x['idsite'] == idsite) and (x['year'] ==  year ) and (x['month'] == month) and (x['day'] == day)
+        
         
     
     def _read_parquet_file(bucket_path, columns, partition_filter):
@@ -75,7 +80,7 @@ class S3ParquetInputStage(AbstractUsageStatsPipelineStage):
         identifier_custom_var = 'custom_var_v1' if type == 'R' else 'custom_var_v6'
 
         # read the events file       
-        data.events_df  = S3ParquetInputStage._read_parquet_file( self.events_path, 
+        data.events_df = S3ParquetInputStage._read_parquet_file( self.events_path, 
             ['idlink_va', 'idvisit','server_time', identifier_custom_var, 'action_type', 'action_url', 'action_url_prefix'],
             partition_filter )
         
