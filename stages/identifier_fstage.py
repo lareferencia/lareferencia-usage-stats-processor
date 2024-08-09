@@ -40,7 +40,7 @@ class IdentifierFilterStage(AbstractUsageStatsPipelineStage):
                     for line in file:
                         #print(line)
                         key, value = line.split(',')
-                        dict_to_search['oai:dnet:' + key.strip()] = value.strip()
+                        dict_to_search[key.strip()] = value.strip()
             except:
                 raise ValueError("Error reading identifier map file %s" % identifier_map_filename)
             
@@ -60,8 +60,8 @@ class IdentifierFilterStage(AbstractUsageStatsPipelineStage):
         for old_identifier in list(data.agg_dict.keys()):
 
             # if old identifier contains the word "dnet" print it
-            if "dnet" in old_identifier:
-                print(old_identifier)
+            # if "dnet" in old_identifier:
+            #    print(old_identifier)
 
 
             hits = 0
