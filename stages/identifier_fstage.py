@@ -59,19 +59,19 @@ class IdentifierFilterStage(AbstractUsageStatsPipelineStage):
         # for every identifier in the data
         for old_identifier in list(data.agg_dict.keys()):
 
-            # normalize the identifier
-            new_identifier = normalize_oai_identifier(old_identifier)
-            
-            # if the identifier map type is regex replace, apply the regex
-            if identifier_map_type == IdentifierFilterStage.IDENTIFIER_MAP_REGEX_REPLACE:
-                new_identifier = regex.sub(identifier_map_replace, old_identifier)
-
             hits = 0
             # if the identifier map type is map from file, get the new identifier from the dictionary
             if identifier_map_type == IdentifierFilterStage.IDENTIFIER_MAP_FROM_FILE:
                 if old_identifier in dict_to_search:
                     new_identifier = dict_to_search[old_identifier]
                     hits += 1
+
+            # normalize the identifier
+            new_identifier = normalize_oai_identifier(old_identifier)
+            
+            # if the identifier map type is regex replace, apply the regex
+            if identifier_map_type == IdentifierFilterStage.IDENTIFIER_MAP_REGEX_REPLACE:
+                new_identifier = regex.sub(identifier_map_replace, old_identifier)
 
             #print(old_identifier, " --> " ,new_identifier)
 
