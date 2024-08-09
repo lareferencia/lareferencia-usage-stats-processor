@@ -59,8 +59,10 @@ class IdentifierFilterStage(AbstractUsageStatsPipelineStage):
         # for every identifier in the data
         for old_identifier in list(data.agg_dict.keys()):
 
-            if old_identifier.contains('dnet'):
+            # if old identifier contains the word "dnet" print it
+            if "dnet" in old_identifier:
                 print(old_identifier)
+
 
             hits = 0
             # if the identifier map type is map from file, get the new identifier from the dictionary
