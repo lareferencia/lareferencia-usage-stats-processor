@@ -40,8 +40,7 @@ class IdentifierFilterStage(AbstractUsageStatsPipelineStage):
                     for line in file:
                         #print(line)
                         key, value = line.split(',')
-                        print(key, value)
-                        dict_to_search[key] = value
+                        dict_to_search[key.strip()] = value.strip()
             except:
                 raise ValueError("Error reading identifier map file %s" % identifier_map_filename)
             
