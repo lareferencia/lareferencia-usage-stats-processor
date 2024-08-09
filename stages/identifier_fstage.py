@@ -38,7 +38,7 @@ class IdentifierFilterStage(AbstractUsageStatsPipelineStage):
                 dict_to_search = {}        
                 with open(identifier_map_filename, 'r') as file:
                     for line in file:
-                        print(line)
+                        #print(line)
                         key, value = line.split(',')
                         dict_to_search[key] = value
             except:
