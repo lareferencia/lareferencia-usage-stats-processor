@@ -25,22 +25,26 @@ class IdentifierFilterStage(AbstractUsageStatsPipelineStage):
 
         ## write a file with the changed identifiers
         ##file = open("identifiers.txt", "a") 
-
-
         
         # if the identifier map type is map from file, read the file
         if identifier_map_type == IdentifierFilterStage.IDENTIFIER_MAP_FROM_FILE:
             if identifier_map_filename is None or identifier_map_filename.strip() == '':
                 raise ValueError("Identifier map file is not defined in the database source")
             
+            # print loading message
+            print("Loading identifier map from file %s" % identifier_map_filename)
+
             try: 
                 dict_to_search = {}        
                 with open(identifier_map_filename, 'r') as file:
                     for line in file:
-                        key, value = line.split()
+                        key, value = line.split(',')
                         dict_to_search[key] = value
             except:
                 raise ValueError("Error reading identifier map file %s" % identifier_map_filename)
+            
+            # print the number of identifiers in the map
+            print("Identifiers in map:", len(dict_to_search.keys()))
             
         # if the identifier map type is regex replace, compile the regex
         elif identifier_map_type == IdentifierFilterStage.IDENTIFIER_MAP_REGEX_REPLACE:
@@ -61,10 +65,12 @@ class IdentifierFilterStage(AbstractUsageStatsPipelineStage):
             if identifier_map_type == IdentifierFilterStage.IDENTIFIER_MAP_REGEX_REPLACE:
                 new_identifier = regex.sub(identifier_map_replace, old_identifier)
 
+            hits = 0
             # if the identifier map type is map from file, get the new identifier from the dictionary
             if identifier_map_type == IdentifierFilterStage.IDENTIFIER_MAP_FROM_FILE:
                 if old_identifier in dict_to_search:
                     new_identifier = dict_to_search[old_identifier]
+                    hits += 1
 
             #print(old_identifier, " --> " ,new_identifier)
 
@@ -72,9 +78,10 @@ class IdentifierFilterStage(AbstractUsageStatsPipelineStage):
             if new_identifier != old_identifier:
                 data.agg_dict[new_identifier] = data.agg_dict.pop(old_identifier)
                 ##file.write(old_identifier + " --> " + str(new_identifier) + "\n")
+
+        if identifier_map_type == IdentifierFilterStage.IDENTIFIER_MAP_FROM_FILE:
+            print("Hits in map:", hits)
                 
-
-
         print("Normalized identifiers:", len(data.agg_dict.keys()))
 
 
