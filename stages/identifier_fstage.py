@@ -40,7 +40,7 @@ class IdentifierFilterStage(AbstractUsageStatsPipelineStage):
                     for line in file:
                         #print(line)
                         key, value = line.split(',')
-                        dict_to_search[key.strip()] = value.strip()
+                        dict_to_search['oai:dnet:' + key.strip()] = value.strip()
             except:
                 raise ValueError("Error reading identifier map file %s" % identifier_map_filename)
             
