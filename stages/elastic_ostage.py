@@ -76,7 +76,7 @@ class ElasticOutputStage(AbstractUsageStatsPipelineStage):
         # create the index name
         index_name = helper.get_index_name(self.index_prefix, idsite, year)
 
-        print (data.keys())
+        source = data.source    
 
          # transform dict_df into a list of documents, converting the dictionary into a list of documents and          
         data.documents = [
@@ -96,7 +96,7 @@ class ElasticOutputStage(AbstractUsageStatsPipelineStage):
               'month': month,
               'day': day,
               'level': self.level,
-              'country': self.helper.get_country_by_level_and_identifier(data.source, identifier)
+              'country': self.helper.get_country_by_level_and_identifier(source, identifier)
 
 
             }, data)
