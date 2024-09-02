@@ -22,6 +22,7 @@ class ElasticOutputStage(AbstractUsageStatsPipelineStage):
             "level" : { "type" : "keyword" },
     
             "identifier" : { "type" : "text" },
+            "country" : { "type" : "keyword" },
         }
     }
 
@@ -43,11 +44,7 @@ class ElasticOutputStage(AbstractUsageStatsPipelineStage):
         self.STATS_BY_COUNTRY_LABEL = configContext.getLabel('STATS_BY_COUNTRY')
 
         self.level = configContext.getArg('type')
-
-
-        # instantiate the MAPPING dictionary
-
-
+    
         # create the properties dict for the stats by country  
         self.MAPPING['properties'][self.STATS_BY_COUNTRY_LABEL] = { "type": "nested" }
         self.MAPPING['properties'][self.STATS_BY_COUNTRY_LABEL]['properties'] = {}
@@ -59,6 +56,8 @@ class ElasticOutputStage(AbstractUsageStatsPipelineStage):
         for action in self.actions:
             self.MAPPING['properties'][action] = { "type" : "long" }
             self.MAPPING['properties'][self.STATS_BY_COUNTRY_LABEL]['properties'][action] = { "type" : "long" }
+
+        self.helper = configContext.getDBHelper()
 
 
     def run(self, data: UsageStatsData) -> UsageStatsData:
@@ -73,6 +72,19 @@ class ElasticOutputStage(AbstractUsageStatsPipelineStage):
             day = 1
 
         idsite = self.getCtx().getArg('site')
+        
+        # calculate the country
+        if self.level == 'L':
+            pass # the country will be calculated for each identifier
+
+
+
+        elif self.level == 'R':
+            country = data.source.country_iso
+        elif self.level == 'N':
+            country = data.source.country_iso
+        else:
+            raise ValueError("Invalid level %s" % self.level)
 
         # create the index name
         index_name = helper.get_index_name(self.index_prefix, idsite, year)
@@ -94,7 +106,9 @@ class ElasticOutputStage(AbstractUsageStatsPipelineStage):
               'year': year,
               'month': month,
               'day': day,
-              'level': self.level
+              'level': self.level,
+              'country': self.helper.get_country_by_level_and_identifier(data.source, identifier)
+
 
             }, data)
             for identifier, data in data.agg_dict.items()

@@ -6,3 +6,4 @@ from .robots_fstage import RobotsFilterStage
 from .s3parquet_istage import S3ParquetInputStage
 from .identifier_fstage import IdentifierFilterStage
 from .s3stats_fstage import S3StatsOutputStage
+from .byIdentifier_fstage import ByIdentifierOutputStage
