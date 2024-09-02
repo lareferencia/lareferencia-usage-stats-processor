@@ -73,21 +73,10 @@ class ElasticOutputStage(AbstractUsageStatsPipelineStage):
 
         idsite = self.getCtx().getArg('site')
         
-        # calculate the country
-        if self.level == 'L':
-            pass # the country will be calculated for each identifier
-
-
-
-        elif self.level == 'R':
-            country = data.source.country_iso
-        elif self.level == 'N':
-            country = data.source.country_iso
-        else:
-            raise ValueError("Invalid level %s" % self.level)
-
         # create the index name
         index_name = helper.get_index_name(self.index_prefix, idsite, year)
+
+        print (data.keys())
 
          # transform dict_df into a list of documents, converting the dictionary into a list of documents and          
         data.documents = [
