@@ -108,7 +108,7 @@ class S3ParquetInputStage(AbstractUsageStatsPipelineStage):
             ## rename the record info column to country
             data.events_df = data.events_df.rename(columns={record_info_custom_var: self.COUNTRY_LABEL})
         else:
-            data.events_df[self.COUNTRY_LABEL] = source.country
+            data.events_df[self.COUNTRY_LABEL] = source.country_iso
 
 
         # set the columns to read from the visits file
