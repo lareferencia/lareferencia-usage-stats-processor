@@ -74,7 +74,7 @@ class ElasticOutputStage(AbstractUsageStatsPipelineStage):
         idsite = self.getCtx().getArg('site')
         
         # create the index name
-        index_name = helper.get_index_name(self.index_prefix, idsite, year)
+        index_name = helper.get_index_name(self.index_prefix, idsite)
 
         source = data.source    
 
