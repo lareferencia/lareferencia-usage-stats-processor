@@ -2,6 +2,7 @@ from processorpipeline import AbstractUsageStatsPipelineStage, UsageStatsData
 from configcontext import ConfigurationContext
 import pandas as pd
 import awswrangler as wr
+from lareferenciastatsdb import SOURCE_TYPE_NATIONAL, SOURCE_TYPE_REGIONAL, SOURCE_TYPE_REPOSITORY
 
 
 class S3ParquetInputStage(AbstractUsageStatsPipelineStage):
@@ -77,32 +78,48 @@ class S3ParquetInputStage(AbstractUsageStatsPipelineStage):
         partition_filter = S3ParquetInputStage._partition_filter(idsite, year, month, day)
 
         # set the custom_var column name based on the type
-        identifier_custom_var = 'custom_var_v1' if type == 'R' else 'custom_var_v6'
+        identifier_custom_var = 'custom_var_v1' if type == SOURCE_TYPE_REPOSITORY else 'custom_var_v6'
 
-        # read the events file       
-        data.events_df = S3ParquetInputStage._read_parquet_file( self.events_path, 
-            ['idlink_va', 'idvisit','server_time', identifier_custom_var, 'action_type', 'action_url', 'action_url_prefix'],
-            partition_filter )
+        # set the custom var for the record info
+        record_info_custom_var = 'custom_var_v2'
+
+        # set the columns to read based on the type
+        events_columns = ['idlink_va', 'idvisit','server_time', identifier_custom_var, 'action_type', 'action_url', 'action_url_prefix']
         
+        ## add the record info column if the source is regional
+        if type == SOURCE_TYPE_REGIONAL:
+            events_columns.append(record_info_custom_var)
+        
+        # read the events file       
+        data.events_df = S3ParquetInputStage._read_parquet_file( self.events_path, events_columns, partition_filter )
+        
+        # if the events file is empty, create an empty dataframe
         if data.events_df is None:
-            data.events_df = pd.DataFrame()
-            # add ['idlink_va', 'idvisit','server_time', identifier_custom_var, 'action_type', 'action_url', 'action_url_prefix'] columns
-            data.events_df = pd.DataFrame(columns=['idlink_va', 'idvisit','server_time', identifier_custom_var, 'action_type', 'action_url', 'action_url_prefix'])
+            data.events_df = pd.DataFrame(columns= events_columns)
             # set server_time to datetime
             data.events_df['server_time'] = pd.to_datetime(data.events_df['server_time'])
         
         # rename the custom_var_v1 column to oai_identifier
         data.events_df = data.events_df.rename(columns={ identifier_custom_var: self.OAI_IDENTIFIER_LABEL })
 
+        if type == SOURCE_TYPE_REGIONAL:
+            ## parse the first two letters of the record info if the patter is XX_XXXXX if the field is not empty
+            data.events_df[record_info_custom_var] = data.events_df[record_info_custom_var].apply(lambda x: x[:2] if x is not None and len(x) > 2 else None)
+            ## rename the record info column to country
+            data.events_df = data.events_df.rename(columns={record_info_custom_var: self.COUNTRY_LABEL})
+        else:
+            data.events_df[self.COUNTRY_LABEL] = source.country
+
+
+        # set the columns to read from the visits file
+        visits_columns = ['idvisit', 'visit_last_action_time', 'visit_first_action_time', 'visit_total_actions', 'location_country']
+
         # read the visits file
-        data.visits_df = S3ParquetInputStage._read_parquet_file ( self.visits_path, 
-            ['idvisit', 'visit_last_action_time', 'visit_first_action_time', 'visit_total_actions', 'location_country'],
-            partition_filter )
+        data.visits_df = S3ParquetInputStage._read_parquet_file ( self.visits_path, visits_columns, partition_filter )
         
+        # if the visits file is empty, create an empty dataframe
         if data.visits_df is None:
-            data.visits_df = pd.DataFrame()
-            # add ['idvisit', 'visit_last_action_time', 'visit_first_action_time', 'visit_total_actions', 'location_country'] columns
-            data.visits_df = pd.DataFrame(columns=['idvisit', 'visit_last_action_time', 'visit_first_action_time', 'visit_total_actions', 'location_country'])
+            data.visits_df = pd.DataFrame(columns=visits_columns)
         
         # rename the location_country column to country
         data.visits_df = data.visits_df.rename(columns={'location_country': self.COUNTRY_LABEL})

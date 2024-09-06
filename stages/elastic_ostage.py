@@ -87,7 +87,7 @@ class ElasticOutputStage(AbstractUsageStatsPipelineStage):
               'identifier': identifier, 
 
               self.STATS_BY_COUNTRY_LABEL: [ self._build_stats({ self.COUNTRY_LABEL: country }, country_data)
-                                       for country, country_data in data[ self.STATS_BY_COUNTRY_LABEL ].items() ], 
+                                       for country, country_data in info[ self.STATS_BY_COUNTRY_LABEL ].items() ], 
                                    
               'date': datetime.datetime(year, month, day),
               
@@ -96,11 +96,11 @@ class ElasticOutputStage(AbstractUsageStatsPipelineStage):
               'month': month,
               'day': day,
               'level': self.level,
-              'country': self.helper.get_country_by_level_and_identifier(source, identifier)
+             self.COUNTRY_LABEL: data.country_by_identifier_dict.get(identifier, 'XX')
 
 
-            }, data)
-            for identifier, data in data.agg_dict.items()
+            }, info)
+            for identifier, info in data.agg_dict.items()
         ]
 
         try:
