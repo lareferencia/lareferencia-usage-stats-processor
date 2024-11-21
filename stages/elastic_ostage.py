@@ -116,7 +116,17 @@ class ElasticOutputStage(AbstractUsageStatsPipelineStage):
             print("Error connecting to opensearch: %s" % e)
             sys.exit(1)
 
+
+
         try:
+            ## check if the index exist
+            # if not create it
+            
+        
+
+
+
+
             index = wr.opensearch.create_index(
                 client=opensearch,
                 mappings=self.MAPPING,
@@ -130,17 +140,18 @@ class ElasticOutputStage(AbstractUsageStatsPipelineStage):
             print ('Index %s created' % (index_name))
             
             ## print response
-            print(index)
         except:
             print ('Index %s already exists' % (index_name))
 
 
-        wr.opensearch.index_documents(
+        response = wr.opensearch.index_documents(
             client=opensearch,
             index=index_name,
             documents=data.documents,
             id_keys=["id"],
             bulk_size=10000
         )
+
+        print ('Indexing response: %s' % response)
                 
         return data
