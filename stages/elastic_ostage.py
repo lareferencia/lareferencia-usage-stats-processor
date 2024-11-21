@@ -103,6 +103,9 @@ class ElasticOutputStage(AbstractUsageStatsPipelineStage):
             for identifier, info in data.agg_dict.items()
         ]
 
+        ## documentes to be indexed in the opensearch
+        print ('Indexing %d documents' % len(data.documents))
+
         try:
             opensearch = wr.opensearch.connect(
                 host=self.elastic_url
@@ -125,6 +128,9 @@ class ElasticOutputStage(AbstractUsageStatsPipelineStage):
                 },
                 index=index_name,  )
             print ('Index %s created' % (index_name))
+            
+            ## print response
+            print(index)
         except:
             print ('Index %s already exists' % (index_name))
 
