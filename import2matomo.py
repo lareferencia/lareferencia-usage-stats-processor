@@ -38,6 +38,7 @@ def send_events_to_matomo(file_path, base_url, token_auth, batch_size):
                         data = json.dumps({'requests': request_list, 'token_auth': token_auth})
                         response = requests.post(base_url, data=data, verify=False)
                         if response.status_code == 200:
+                            print(f"Batch sent successfully")
                             logging.debug(f"Batch sent successfully: {request_list}")
                             error_count = 0  # Reset error count on success
                         else:
