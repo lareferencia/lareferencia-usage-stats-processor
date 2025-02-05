@@ -20,6 +20,12 @@ def parse_arguments():
     parser.add_argument('--debug', action='store_true', help='Enable debug mode')
     return parser.parse_args()
 
+def remove_token_auth(line):
+    # Remover el parámetro token_auth de la línea
+    parts = line.split('&')
+    parts = [part for part in parts if not part.startswith('token_auth=')]
+    return '&'.join(parts)
+
 def send_events_to_matomo(file_path, base_url, token_auth, batch_size):
     open_func = gzip.open if file_path.endswith('.gz') else open
     request_count = 0
@@ -30,6 +36,8 @@ def send_events_to_matomo(file_path, base_url, token_auth, batch_size):
         for line in file:
             line = line.strip()
             if line:
+                # Remover token_auth de la línea
+                line = remove_token_auth(line)
                 request_list.append(line)
                 request_count += 1
 
