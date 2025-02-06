@@ -31,22 +31,30 @@ def send_events_to_matomo(file_path, base_url, token_auth, batch_size):
     request_count = 0
     error_count = 0
     request_list = []
+    total_tracked = 0
+    total_invalid = 0
 
     with open_func(file_path, 'rt') as file:
         for line in file:
             line = line.strip()
             if line:
                 # Remover token_auth de la línea
-                line = remove_token_auth(line)
+                #line = remove_token_auth(line)
                 request_list.append(line)
                 request_count += 1
 
                 if len(request_list) >= batch_size:  # Send requests in batches
                     try:
-                        data = json.dumps({'requests': request_list, 'token_auth': token_auth})
-                        response = requests.post(base_url, data=data, verify=False)
+                        data = json.dumps({'requests': request_list})
+                        response = requests.post(base_url, data=data, headers={'Content-Type': 'application/json'})
                         if response.status_code == 200:
-                            print(f"Batch sent successfully")
+                            response_data = response.json()
+                            status = response_data.get('status', 'unknown')
+                            tracked = response_data.get('tracked', 0)
+                            invalid = response_data.get('invalid', 0)
+                            total_tracked += tracked
+                            total_invalid += invalid
+                            print(f"Batch sent successfully: status={status}, tracked={tracked}, invalid={invalid}")
                             logging.debug(f"Batch sent successfully: {request_list}")
                             error_count = 0  # Reset error count on success
                         else:
@@ -68,16 +76,22 @@ def send_events_to_matomo(file_path, base_url, token_auth, batch_size):
         # Send any remaining requests
         if request_list:
             try:
-                data = json.dumps({'requests': request_list, 'token_auth': token_auth})
-                response = requests.post(base_url, data=data, verify=False)
+                data = json.dumps({'requests': request_list})
+                response = requests.post(base_url, data=data, headers={'Content-Type': 'application/json'})
                 if response.status_code == 200:
-                    logging.debug(f"Final batch sent successfully: {request_list}")
+                    response_data = response.json()
+                    status = response_data.get('status', 'unknown')
+                    tracked = response_data.get('tracked', 0)
+                    invalid = response_data.get('invalid', 0)
+                    total_tracked += tracked
+                    total_invalid += invalid
+                    logging.debug(f"Final batch sent successfully: status={status}, tracked={tracked}, invalid={invalid}")
                 else:
                     logging.error(f"Failed to send final batch: {request_list}, Status code: {response.status_code}")
             except requests.RequestException as e:
                 logging.exception(f"Connection error while sending final batch: {request_list}, Error: {e}")
 
-    logging.info("Finished processing all events.")
+    logging.info(f"Finished processing all events. Total lines: {request_count}, Total tracked: {total_tracked}, Total invalid: {total_invalid}")
 
 if __name__ == "__main__":
     
