@@ -15,18 +15,12 @@ def parse_arguments():
     parser = argparse.ArgumentParser(description='Send events to Matomo from a text file.')
     parser.add_argument('file_path', type=str, help='Path to the file containing events')
     parser.add_argument('matomo_url', type=str, help='Matomo server URL')
-    parser.add_argument('token_auth', type=str, help='Matomo authentication token')
     parser.add_argument('--batch_size', type=int, default=100, help='Number of events to send in each batch')
     parser.add_argument('--debug', action='store_true', help='Enable debug mode')
     return parser.parse_args()
 
-def remove_token_auth(line):
-    # Remover el parámetro token_auth de la línea
-    parts = line.split('&')
-    parts = [part for part in parts if not part.startswith('token_auth=')]
-    return '&'.join(parts)
 
-def send_events_to_matomo(file_path, base_url, token_auth, batch_size):
+def send_events_to_matomo(file_path, base_url, batch_size):
     open_func = gzip.open if file_path.endswith('.gz') else open
     request_count = 0
     error_count = 0
@@ -38,8 +32,6 @@ def send_events_to_matomo(file_path, base_url, token_auth, batch_size):
         for line in file:
             line = line.strip()
             if line:
-                # Remover token_auth de la línea
-                #line = remove_token_auth(line)
                 request_list.append(line)
                 request_count += 1
 
@@ -102,4 +94,4 @@ if __name__ == "__main__":
     else:
         logging.getLogger().setLevel(logging.INFO)
     
-    send_events_to_matomo(args.file_path, args.matomo_url, args.token_auth, args.batch_size)
+    send_events_to_matomo(args.file_path, args.matomo_url, args.batch_size)
