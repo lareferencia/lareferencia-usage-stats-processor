@@ -111,6 +111,31 @@ def get_dataframe_memory_usage(df, name):
 
 # Chunked reader removed (rollback): use awswrangler's mysql.read_sql_query directly.
 
+def estimate_query_size(query, conn, debug_mode=False):
+    """
+    Estimate the size of a query by getting row count before executing the full query
+    """
+    try:
+        # Convert SELECT query to COUNT query
+        count_query = query.upper().replace("SELECT *", "SELECT COUNT(*)", 1)
+        if "SELECT VA.*" in count_query:
+            count_query = count_query.replace("SELECT VA.*", "SELECT COUNT(*)", 1)
+        
+        if debug_mode:
+            s3logger.loginfo(f"Estimating query size with: {count_query}")
+        
+        count_df = wr.mysql.read_sql_query(sql=count_query, con=conn)
+        row_count = count_df.iloc[0, 0]
+        
+        if debug_mode:
+            s3logger.loginfo(f"Estimated row count: {row_count:,}")
+        
+        return row_count
+    except Exception as e:
+        if debug_mode:
+            s3logger.logwarning(f"Could not estimate query size: {e}")
+        return None
+
 def process_data_type(query, data_type, conn, s3_bucket, partition_cols, site, year, month, day, dry_run, debug_mode):
     """
     Process a specific data type (visits or events) separately to reduce memory usage
@@ -118,7 +143,23 @@ def process_data_type(query, data_type, conn, s3_bucket, partition_cols, site, y
     if debug_mode:
         s3logger.loginfo(f"Executing {data_type} query: {query}")
     
+    # Estimate query size before executing
+    estimated_rows = estimate_query_size(query, conn, debug_mode)
+    if estimated_rows and estimated_rows > 500000:  # More than 500K rows
+        s3logger.logwarning(f"Large query detected for {data_type}: {estimated_rows:,} rows. This may cause memory issues.")
+        if estimated_rows > 2000000:  # More than 2M rows
+            s3logger.logerror(f"CRITICAL: Query too large for {data_type}: {estimated_rows:,} rows. Aborting to prevent OOM.")
+            s3logger.logerror("Please process data by day instead of by month")
+            return
+    
     log_memory_usage(f"BEFORE_{data_type.upper()}_QUERY", debug_mode)
+    
+    # Check available memory before query
+    system_memory = psutil.virtual_memory()
+    available_gb = system_memory.available / 1024 / 1024 / 1024
+    if available_gb < 2:  # Less than 2GB available
+        s3logger.logerror(f"CRITICAL: Low memory before {data_type} query. Available: {available_gb:.2f}GB. Aborting.")
+        return
     
     # Read data
     df = wr.mysql.read_sql_query(sql=query, con=conn)
@@ -264,7 +305,49 @@ def main(args_dict):
     if day is not None:
         partition_cols.append('day')
     
-    # Process visits first to reduce memory usage
+    # Check if we should auto-split by days for large monthly queries
+    if day is None:
+        # Estimate the size of monthly query before processing
+        visit_row_estimate = estimate_query_size(visit_query, conn, debug_mode)
+        event_row_estimate = estimate_query_size(event_query, conn, debug_mode)
+        
+        # If either query is too large, split by days automatically
+        max_monthly_rows = 1000000  # 1M rows threshold
+        if ((visit_row_estimate and visit_row_estimate > max_monthly_rows) or 
+            (event_row_estimate and event_row_estimate > max_monthly_rows)):
+            
+            s3logger.logwarning(f"Large monthly query detected. Auto-splitting by days.")
+            s3logger.loginfo(f"Visits estimate: {visit_row_estimate:,}, Events estimate: {event_row_estimate:,}")
+            
+            # Process each day of the month separately
+            last_day = monthrange(year, month)[1]
+            
+            for current_day in range(1, last_day + 1):
+                s3logger.loginfo(f"Processing day {current_day} of {last_day}...")
+                
+                # Create daily queries
+                daily_visit_query = "SELECT * FROM matomo_log_visit WHERE idsite = {3} and visit_last_action_time BETWEEN '{0:04d}-{1:02d}-{2:02d} 00:00:00' AND '{0:04d}-{1:02d}-{2:02d} 23:59:59'".format(year, month, current_day, site)
+                daily_event_query = """SELECT va.*, a.`type` as action_type, a.name  as action_url, a.url_prefix as action_url_prefix
+                                        FROM (matomo_log_link_visit_action va left join matomo_log_action a on (va.idaction_url = a.idaction)) 
+                                        WHERE idsite = {3} and server_time BETWEEN '{0:04d}-{1:02d}-{2:02d} 00:00:00.000' AND '{0:04d}-{1:02d}-{2:02d} 23:59:59.999' AND NOT RIGHT(a.name,8) = '.pdf.jpg'
+                                    """.format(year, month, current_day, site)
+                
+                # Update partition columns to include day
+                daily_partition_cols = ['idsite', 'year', 'month', 'day']
+                
+                # Process each day
+                s3logger.loginfo(f"Processing visits for day {current_day}...")
+                process_data_type(daily_visit_query, "visits", conn, s3_visits_bucket, daily_partition_cols, site, year, month, current_day, dry_run, debug_mode)
+                
+                s3logger.loginfo(f"Processing events for day {current_day}...")
+                process_data_type(daily_event_query, "events", conn, s3_events_bucket, daily_partition_cols, site, year, month, current_day, dry_run, debug_mode)
+                
+                log_memory_usage(f"AFTER_DAY_{current_day}_COMPLETE", debug_mode)
+            
+            s3logger.loginfo(f"Completed processing all {last_day} days for {year}-{month}")
+            return  # Exit early since we processed by days
+    
+    # Process visits first to reduce memory usage (only if not auto-split)
     s3logger.loginfo("Processing visits data...")
     process_data_type(visit_query, "visits", conn, s3_visits_bucket, partition_cols, site, year, month, day, dry_run, debug_mode)
     
