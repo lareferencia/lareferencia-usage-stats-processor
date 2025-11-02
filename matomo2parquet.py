@@ -59,7 +59,7 @@ def log_memory_usage(stage, debug_mode=False):
         # Emergency mode if memory usage is extremely high
         if memory_percent > 85:
             s3logger.logerror(f"CRITICAL: Memory usage extremely high ({memory_percent:.2f}%)")
-            s3logger.logerror("Consider using smaller chunk_size or processing data in smaller date ranges")
+            s3logger.logerror("Consider processing data in smaller date ranges or using more selective queries")
             
         return rss_mb, memory_percent
     return None, None
@@ -109,50 +109,74 @@ def get_dataframe_memory_usage(df, name):
     
     return memory_mb
 
-def read_sql_in_chunks(query, connection, chunk_size=10000, debug_mode=False):
+# Chunked reader removed (rollback): use awswrangler's mysql.read_sql_query directly.
+
+def process_data_type(query, data_type, conn, s3_bucket, partition_cols, site, year, month, day, dry_run, debug_mode):
     """
-    Read SQL query in chunks to reduce memory usage
+    Process a specific data type (visits or events) separately to reduce memory usage
     """
     if debug_mode:
-        s3logger.loginfo(f"Reading SQL in chunks of {chunk_size} rows")
+        s3logger.loginfo(f"Executing {data_type} query: {query}")
     
-    try:
-        # Try to read with chunksize parameter
-        chunk_iter = pd.read_sql(query, connection, chunksize=chunk_size)
-        chunks = []
-        total_rows = 0
-        
-        for i, chunk in enumerate(chunk_iter):
-            if debug_mode and i % 10 == 0:  # Log every 10 chunks
-                log_memory_usage(f"PROCESSING_CHUNK_{i}", debug_mode)
-            
-            chunks.append(chunk)
-            total_rows += len(chunk)
-            
-            # If we accumulate too many chunks, combine them and clear memory
-            if len(chunks) >= 50:  # Combine every 50 chunks
-                if debug_mode:
-                    s3logger.loginfo(f"Combining {len(chunks)} chunks...")
-                combined_chunk = pd.concat(chunks, ignore_index=True)
-                chunks = [combined_chunk]
-                gc.collect()
-        
-        if debug_mode:
-            s3logger.loginfo(f"Total rows read: {total_rows}")
-        
-        if chunks:
-            result = pd.concat(chunks, ignore_index=True)
-            del chunks
-            gc.collect()
-            return result
+    log_memory_usage(f"BEFORE_{data_type.upper()}_QUERY", debug_mode)
+    
+    # Read data
+    df = wr.mysql.read_sql_query(sql=query, con=conn)
+    
+    log_memory_usage(f"AFTER_{data_type.upper()}_QUERY", debug_mode)
+    
+    if df.empty:
+        s3logger.logwarning(f"No {data_type} data for site: {site} year: {year} month: {month} day: {day}")
+        return
+    
+    if debug_mode:
+        get_dataframe_memory_usage(df, f"{data_type}_df")
+        # Optimize memory usage
+        df = optimize_dataframe_memory(df, debug_mode)
+    
+    log_memory_usage(f"BEFORE_{data_type.upper()}_DATA_PROCESSING", debug_mode)
+    
+    # Process data based on type
+    if data_type == "visits":
+        # extract day, month and year from datetime
+        if day is None:
+            df['day'] = 1
         else:
-            return pd.DataFrame()
-            
-    except Exception as e:
-        if debug_mode:
-            s3logger.logwarning(f"Chunked reading failed: {e}, falling back to regular read")
-        # Fallback to regular read
-        return wr.mysql.read_sql_query(sql=query, con=connection)
+            df['day'] = day
+        df['month'] = month 
+        df['year'] = year
+    else:  # events
+        df['day'] = df['server_time'].dt.day
+        df['month'] = df['server_time'].dt.month
+        df['year'] = df['server_time'].dt.year
+    
+    log_memory_usage(f"AFTER_{data_type.upper()}_DATA_PROCESSING", debug_mode)
+    
+    if debug_mode:
+        get_dataframe_memory_usage(df, f"{data_type}_df_processed")
+    
+    # Write to S3
+    if not dry_run:
+        log_memory_usage(f"BEFORE_{data_type.upper()}_S3_WRITE", debug_mode)
+        
+        s3logger.loginfo(f"Writing {data_type} data to S3...")
+        result = wr.s3.to_parquet(
+            df=df,
+            path='s3://' + s3_bucket,
+            dataset=True,
+            partition_cols=partition_cols)
+        
+        log_memory_usage(f"AFTER_{data_type.upper()}_S3_WRITE", debug_mode)
+    else:
+        s3logger.loginfo(f"Dry run, not writing {data_type} data to s3")
+    
+    # Clear dataframe from memory
+    if debug_mode:
+        s3logger.loginfo(f"Clearing {data_type}_df from memory...")
+    del df
+    gc.collect()
+    
+    log_memory_usage(f"AFTER_{data_type.upper()}_DF_CLEANUP", debug_mode)
 
 def main(args_dict):
 
@@ -235,114 +259,18 @@ def main(args_dict):
                         """.format(year,month,day,site)
 
     
-    # read visit data
-    if debug_mode:
-        s3logger.loginfo(f"Executing visit query: {visit_query}")
+        # Setup partition columns
+    partition_cols = ['idsite', 'year', 'month']
+    if day is not None:
+        partition_cols.append('day')
     
-    log_memory_usage("BEFORE_VISIT_QUERY", debug_mode)
+    # Process visits first to reduce memory usage
+    s3logger.loginfo("Processing visits data...")
+    process_data_type(visit_query, "visits", conn, s3_visits_bucket, partition_cols, site, year, month, day, dry_run, debug_mode)
     
-    # Use chunked reading for large datasets
-    chunk_size = args_dict.get('chunk_size', 10000)
-    if debug_mode:
-        visit_df = read_sql_in_chunks(visit_query, conn, chunk_size, debug_mode)
-    else:
-        visit_df = wr.mysql.read_sql_query(sql=visit_query,con=conn)
-        
-    log_memory_usage("AFTER_VISIT_QUERY", debug_mode)
-    
-    if not visit_df.empty and debug_mode:
-        get_dataframe_memory_usage(visit_df, "visit_df")
-        # Optimize memory usage
-        visit_df = optimize_dataframe_memory(visit_df, debug_mode)
-    
-    if debug_mode:
-        s3logger.loginfo(f"Executing event query: {event_query}")
-    
-    log_memory_usage("BEFORE_EVENT_QUERY", debug_mode)
-    
-    # Use chunked reading for large datasets
-    if debug_mode:
-        event_df = read_sql_in_chunks(event_query, conn, chunk_size, debug_mode)
-    else:
-        event_df = wr.mysql.read_sql_query(sql=event_query,con=conn)
-        
-    log_memory_usage("AFTER_EVENT_QUERY", debug_mode)
-    
-    if not event_df.empty and debug_mode:
-        get_dataframe_memory_usage(event_df, "event_df")
-        # Optimize memory usage
-        event_df = optimize_dataframe_memory(event_df, debug_mode)
-
-    if visit_df.empty:
-        s3logger.logwarning("No data for site: %s year: %s month: %s day: %s" % (site, year, month, day))
-    else:
-        log_memory_usage("BEFORE_DATA_PROCESSING", debug_mode)
-        
-        # extract day, month and year from datetime
-        if day is None:
-            visit_df['day']   = 1
-        else:
-            visit_df['day']   = day
-
-        visit_df['month'] = month 
-        visit_df['year']  = year 
-
-        event_df['day']   = event_df['server_time'].dt.day
-        event_df['month'] = event_df['server_time'].dt.month
-        event_df['year']  = event_df['server_time'].dt.year
-        
-        log_memory_usage("AFTER_DATA_PROCESSING", debug_mode)
-        
-        if debug_mode:
-            get_dataframe_memory_usage(visit_df, "visit_df_processed")
-            get_dataframe_memory_usage(event_df, "event_df_processed")
-        
-        # write to s3
-        if not dry_run:
-
-            partition_cols = ['idsite', 'year', 'month']
-
-            if day is not None:
-                partition_cols.append('day')
-
-            log_memory_usage("BEFORE_S3_WRITE", debug_mode)
-            
-            s3logger.loginfo("Writing visit data to S3...")
-            res_visit = wr.s3.to_parquet(
-                    df=visit_df,
-                    path='s3://' + s3_visits_bucket,
-                    dataset=True,
-                    partition_cols=partition_cols)
-            
-            log_memory_usage("AFTER_VISIT_S3_WRITE", debug_mode)
-            
-            # Clear visit_df from memory to free space
-            if debug_mode:
-                s3logger.loginfo("Clearing visit_df from memory...")
-            del visit_df
-            gc.collect()
-            
-            log_memory_usage("AFTER_VISIT_DF_CLEANUP", debug_mode)
-            
-            s3logger.loginfo("Writing event data to S3...")
-            res_event = wr.s3.to_parquet(
-                    df=event_df,
-                    path='s3://' + s3_events_bucket,
-                    dataset=True,
-                    partition_cols=partition_cols)
-            
-            log_memory_usage("AFTER_EVENT_S3_WRITE", debug_mode)
-            
-            # Clear event_df from memory to free space
-            if debug_mode:
-                s3logger.loginfo("Clearing event_df from memory...")
-            del event_df
-            gc.collect()
-            
-            log_memory_usage("AFTER_EVENT_DF_CLEANUP", debug_mode)
-
-        else:
-            s3logger.loginfo("Dry run, not writing to s3")
+    # Process events separately after visits are processed and memory freed
+    s3logger.loginfo("Processing events data...")
+    process_data_type(event_query, "events", conn, s3_events_bucket, partition_cols, site, year, month, day, dry_run, debug_mode)
                        
     log_memory_usage("BEFORE_CLEANUP", debug_mode)
     
@@ -417,9 +345,7 @@ def parse_args():
     parser.add_argument("-v", "--verbose", default=False, type=bool, help="verbose mode")
 
     parser.add_argument("--debug", default=False, action='store_true', help="enable debug mode with detailed memory monitoring")
-
-    parser.add_argument("--chunk_size", default=10000, type=int, help="chunk size for reading large datasets (default: 10000)")
-
+    
     parser.add_argument("--dry_run", default=False, type=bool, required=False, help="dont write to s3")
 
     args = parser.parse_args()
