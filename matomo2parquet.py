@@ -113,6 +113,12 @@ def process_data_type(query, data_type, conn_params, s3_bucket, partition_cols, 
     results in batches, avoiding repeated queries.
     """
     if debug_mode:
+        print(f"\n{'='*60}")
+        print(f"[DEBUG] Processing {data_type.upper()}")
+        print(f"{'='*60}")
+        print(f"[DEBUG] Query:\n{query}")
+        print(f"[DEBUG] Chunk size: {chunk_size}")
+        print(f"{'='*60}\n")
         s3logger.loginfo(f"Executing {data_type} query with chunk_size={chunk_size}: {query}")
     
     log_memory_usage(f"BEFORE_{data_type.upper()}_QUERY", debug_mode)
@@ -137,6 +143,9 @@ def process_data_type(query, data_type, conn_params, s3_bucket, partition_cols, 
             chunk_num += 1
             rows_in_chunk = len(chunk_df)
             total_rows += rows_in_chunk
+            
+            if debug_mode:
+                print(f"[DEBUG] {data_type} chunk {chunk_num}: {rows_in_chunk} rows (total so far: {total_rows})")
             
             if chunk_df.empty:
                 continue
@@ -182,8 +191,12 @@ def process_data_type(query, data_type, conn_params, s3_bucket, partition_cols, 
         
         if total_rows == 0:
             s3logger.logwarning(f"No {data_type} data for site: {site} year: {year} month: {month} day: {day}")
+            if debug_mode:
+                print(f"[DEBUG] {data_type.upper()}: No data found")
         else:
             s3logger.loginfo(f"Completed {data_type}: processed {total_rows} rows in {chunk_num} chunks")
+            if debug_mode:
+                print(f"\n[DEBUG] {data_type.upper()} COMPLETE: {total_rows} total rows in {chunk_num} chunks\n")
             
     finally:
         streaming_conn.close()
