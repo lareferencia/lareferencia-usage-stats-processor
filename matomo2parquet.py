@@ -3,23 +3,18 @@ import os
 import sys
 import argparse
 from calendar import monthrange
-from unicodedata import name
-import requests
-import json
 import gc
 import psutil
 import tracemalloc
 
 import pymysql
+import pymysql.cursors
 import awswrangler as wr
 import pandas as pd
 
 import datetime
 
-from config import read_ini
-
-import xxhash
-import atexit
+from config import read_ini, resolve_chunk_size
 from s3logger import S3Logger 
 
 # logger for s3
@@ -46,9 +41,7 @@ def log_memory_usage(stage, debug_mode=False):
         memory_msg = f"[MEMORY {stage}] RSS: {rss_mb:.2f}MB, VMS: {vms_mb:.2f}MB, Percent: {memory_percent:.2f}%, Available: {available_mb:.2f}MB"
         
         s3logger.loginfo(memory_msg)
-        
-        if debug_mode:
-            print(memory_msg)
+        print(memory_msg)
         
         # Force garbage collection if memory usage is high
         if memory_percent > 70:
@@ -111,72 +104,92 @@ def get_dataframe_memory_usage(df, name):
 
 # Chunked reader removed (rollback): use awswrangler's mysql.read_sql_query directly.
 
-def process_data_type(query, data_type, conn, s3_bucket, partition_cols, site, year, month, day, dry_run, debug_mode):
+def process_data_type(query, data_type, conn_params, s3_bucket, partition_cols, site, year, month, day, dry_run, debug_mode, chunk_size=100000):
     """
-    Process a specific data type (visits or events) separately to reduce memory usage
+    Process a specific data type (visits or events) using Server-Side Cursor
+    to stream results in chunks without loading entire dataset in memory.
+    
+    Uses SSCursor which executes the query ONCE on the server and streams
+    results in batches, avoiding repeated queries.
     """
     if debug_mode:
-        s3logger.loginfo(f"Executing {data_type} query: {query}")
+        s3logger.loginfo(f"Executing {data_type} query with chunk_size={chunk_size}: {query}")
     
     log_memory_usage(f"BEFORE_{data_type.upper()}_QUERY", debug_mode)
     
-    # Read data
-    df = wr.mysql.read_sql_query(sql=query, con=conn)
+    # Create streaming connection with Server-Side Cursor
+    streaming_conn = pymysql.connect(
+        host=conn_params['host'],
+        user=conn_params['user'],
+        passwd=conn_params['passwd'],
+        db=conn_params['db'],
+        connect_timeout=conn_params.get('connect_timeout', 5),
+        cursorclass=pymysql.cursors.SSCursor  # Server-side cursor for streaming
+    )
     
-    log_memory_usage(f"AFTER_{data_type.upper()}_QUERY", debug_mode)
-    
-    if df.empty:
-        s3logger.logwarning(f"No {data_type} data for site: {site} year: {year} month: {month} day: {day}")
-        return
-    
-    if debug_mode:
-        get_dataframe_memory_usage(df, f"{data_type}_df")
-        # Optimize memory usage
-        df = optimize_dataframe_memory(df, debug_mode)
-    
-    log_memory_usage(f"BEFORE_{data_type.upper()}_DATA_PROCESSING", debug_mode)
-    
-    # Process data based on type
-    if data_type == "visits":
-        # extract day, month and year from datetime
-        if day is None:
-            df['day'] = 1
+    try:
+        chunk_num = 0
+        total_rows = 0
+        first_chunk = True
+        
+        # Stream data in chunks - query executes ONCE, results streamed
+        for chunk_df in pd.read_sql(query, streaming_conn, chunksize=chunk_size):
+            chunk_num += 1
+            rows_in_chunk = len(chunk_df)
+            total_rows += rows_in_chunk
+            
+            if chunk_df.empty:
+                continue
+            
+            log_memory_usage(f"{data_type.upper()}_CHUNK_{chunk_num}", debug_mode)
+            
+            if debug_mode:
+                get_dataframe_memory_usage(chunk_df, f"{data_type}_chunk_{chunk_num}")
+                chunk_df = optimize_dataframe_memory(chunk_df, debug_mode)
+            
+            # Process data based on type
+            if data_type == "visits":
+                chunk_df['day'] = day if day is not None else 1
+                chunk_df['month'] = month
+                chunk_df['year'] = year
+            else:  # events
+                chunk_df['day'] = chunk_df['server_time'].dt.day
+                chunk_df['month'] = chunk_df['server_time'].dt.month
+                chunk_df['year'] = chunk_df['server_time'].dt.year
+            
+            # Write chunk to S3
+            if not dry_run:
+                # Use 'append' mode to add to existing dataset
+                # First chunk can use 'overwrite_partitions' if needed
+                write_mode = 'append'
+                
+                s3logger.loginfo(f"Writing {data_type} chunk {chunk_num} ({rows_in_chunk} rows) to S3...")
+                wr.s3.to_parquet(
+                    df=chunk_df,
+                    path='s3://' + s3_bucket,
+                    dataset=True,
+                    mode=write_mode,
+                    partition_cols=partition_cols
+                )
+            else:
+                s3logger.loginfo(f"Dry run: would write {data_type} chunk {chunk_num} ({rows_in_chunk} rows)")
+            
+            # Clear chunk from memory
+            del chunk_df
+            gc.collect()
+            
+            log_memory_usage(f"AFTER_{data_type.upper()}_CHUNK_{chunk_num}_CLEANUP", debug_mode)
+        
+        if total_rows == 0:
+            s3logger.logwarning(f"No {data_type} data for site: {site} year: {year} month: {month} day: {day}")
         else:
-            df['day'] = day
-        df['month'] = month 
-        df['year'] = year
-    else:  # events
-        df['day'] = df['server_time'].dt.day
-        df['month'] = df['server_time'].dt.month
-        df['year'] = df['server_time'].dt.year
+            s3logger.loginfo(f"Completed {data_type}: processed {total_rows} rows in {chunk_num} chunks")
+            
+    finally:
+        streaming_conn.close()
+        s3logger.loginfo(f"Closed streaming connection for {data_type}")
     
-    log_memory_usage(f"AFTER_{data_type.upper()}_DATA_PROCESSING", debug_mode)
-    
-    if debug_mode:
-        get_dataframe_memory_usage(df, f"{data_type}_df_processed")
-    
-    # Write to S3
-    if not dry_run:
-        log_memory_usage(f"BEFORE_{data_type.upper()}_S3_WRITE", debug_mode)
-        
-        s3logger.loginfo(f"Writing {data_type} data to S3...")
-        result = wr.s3.to_parquet(
-            df=df,
-            path='s3://' + s3_bucket,
-            dataset=True,
-            partition_cols=partition_cols)
-        
-        log_memory_usage(f"AFTER_{data_type.upper()}_S3_WRITE", debug_mode)
-    else:
-        s3logger.loginfo(f"Dry run, not writing {data_type} data to s3")
-    
-    # Clear dataframe from memory
-    if debug_mode:
-        s3logger.loginfo(f"Clearing {data_type}_df from memory...")
-    del df
-    gc.collect()
-    
-    log_memory_usage(f"AFTER_{data_type.upper()}_DF_CLEANUP", debug_mode)
+    log_memory_usage(f"AFTER_{data_type.upper()}_COMPLETE", debug_mode)
 
 def main(args_dict):
 
@@ -216,8 +229,6 @@ def main(args_dict):
         s3logger.set_bucket(config["S3_LOGS"]["LOGS_PATH"])
         s3logger.loginfo("Starting procesing on datetime: %s site: %s year: %s month: %s day: %s" % ( datetime.datetime.now(), site, year, month, day))
 
-        # register write logs to s3 at exit
-        #atexit.register(s3logger.write, name="end")
 
     except Exception as e:
         print("Error : %s" % e)
@@ -226,37 +237,73 @@ def main(args_dict):
         traceback.print_exc()
         sys.exit(1)
 
-    # connect to mysql
+    # Prepare connection parameters (connection created per data type for SSCursor)
+    conn_params = {
+        'host': db_host,
+        'user': db_username,
+        'passwd': db_passwd,
+        'db': db_database,
+        'connect_timeout': 5
+    }
+    
+    # Test connection
     try:
-        log_memory_usage("BEFORE_DB_CONNECTION", debug_mode)
-        conn = pymysql.connect(host=db_host, user=db_username, passwd=db_passwd, db=db_database, connect_timeout=5)
-        log_memory_usage("AFTER_DB_CONNECTION", debug_mode)
+        log_memory_usage("TESTING_DB_CONNECTION", debug_mode)
+        test_conn = pymysql.connect(**conn_params)
+        test_conn.close()
+        s3logger.loginfo("Database connection test successful")
     except pymysql.MySQLError as e:
         s3logger.logerror("ERROR: Unexpected error: Could not connect to MySQL instance.")
         s3logger.logerror(e)
-        sys.exit()
+        sys.exit(1)
 
     
     # get data from mysql
-    # if day is not specified, throw error
+    # Build date range strings safely using datetime objects
+    def build_date_range(year: int, month: int, day_start: int, day_end: int):
+        """Build date range strings safely from validated integer parameters"""
+        start_date = datetime.datetime(year, month, day_start, 0, 0, 0)
+        end_date = datetime.datetime(year, month, day_end, 23, 59, 59)
+        return start_date.strftime('%Y-%m-%d %H:%M:%S'), end_date.strftime('%Y-%m-%d %H:%M:%S')
+    
+    # Validate parameters are integers (argparse already enforces this, but double-check)
+    if not all(isinstance(x, int) for x in [year, month, site]):
+        raise ValueError(f"Invalid parameter types: year={type(year)}, month={type(month)}, site={type(site)}")
+    
+    if day is not None and not isinstance(day, int):
+        raise ValueError(f"Invalid day type: {type(day)}")
+    
+    # Build queries based on whether day is specified
     if day is None:
-        #calculate the last day of the month
+        # Monthly query - calculate last day of month
         last_day = monthrange(year, month)[1]
-       
-        visit_query = """SELECT * FROM matomo_log_visit WHERE idvisit in 
-                        (SELECT idvisit FROM matomo_log_link_visit_action WHERE idsite = {3} and server_time BETWEEN '{0:04d}-{1:02d}-01 00:00:00.000' AND '{0:04d}-{1:02d}-{2:02d} 23:59:59.999')
-                        """.format(year,month,last_day,site)
+        start_dt, end_dt = build_date_range(year, month, 1, last_day)
         
-        event_query = """SELECT va.*, a.`type` as action_type, a.name  as action_url, a.url_prefix as action_url_prefix
-                            FROM (matomo_log_link_visit_action va left join matomo_log_action a on (va.idaction_url = a.idaction)) 
-                            WHERE idsite = {3} and server_time BETWEEN '{0:04d}-{1:02d}-01 00:00:00.000' AND '{0:04d}-{1:02d}-{2:02d} 23:59:59.999' AND NOT RIGHT(a.name,8) = '.pdf.jpg'
-                        """.format(year,month,last_day,site) 
+        visit_query = f"""SELECT * FROM matomo_log_visit WHERE idvisit in 
+                        (SELECT idvisit FROM matomo_log_link_visit_action 
+                         WHERE idsite = {int(site)} 
+                         AND server_time BETWEEN '{start_dt}.000' AND '{end_dt}.999')"""
+        
+        event_query = f"""SELECT va.*, a.`type` as action_type, a.name as action_url, a.url_prefix as action_url_prefix
+                         FROM (matomo_log_link_visit_action va 
+                               LEFT JOIN matomo_log_action a ON (va.idaction_url = a.idaction)) 
+                         WHERE idsite = {int(site)} 
+                         AND server_time BETWEEN '{start_dt}.000' AND '{end_dt}.999' 
+                         AND NOT RIGHT(a.name, 8) = '.pdf.jpg'"""
     else:
-        visit_query = "SELECT * FROM matomo_log_visit WHERE idsite = {3} and visit_last_action_time BETWEEN '{0:04d}-{1:02d}-{2:02d} 00:00:00' AND '{0:04d}-{1:02d}-{2:02d} 23:59:59'".format(year,month,day,site)
-        event_query = """SELECT va.*, a.`type` as action_type, a.name  as action_url, a.url_prefix as action_url_prefix
-                            FROM (matomo_log_link_visit_action va left join matomo_log_action a on (va.idaction_url = a.idaction)) 
-                            WHERE idsite = {3} and server_time BETWEEN '{0:04d}-{1:02d}-{2:02d} 00:00:00.000' AND '{0:04d}-{1:02d}-{2:02d} 23:59:59.999' AND NOT RIGHT(a.name,8) = '.pdf.jpg'
-                        """.format(year,month,day,site)
+        # Daily query
+        start_dt, end_dt = build_date_range(year, month, day, day)
+        
+        visit_query = f"""SELECT * FROM matomo_log_visit 
+                         WHERE idsite = {int(site)} 
+                         AND visit_last_action_time BETWEEN '{start_dt}' AND '{end_dt}'"""
+        
+        event_query = f"""SELECT va.*, a.`type` as action_type, a.name as action_url, a.url_prefix as action_url_prefix
+                         FROM (matomo_log_link_visit_action va 
+                               LEFT JOIN matomo_log_action a ON (va.idaction_url = a.idaction)) 
+                         WHERE idsite = {int(site)} 
+                         AND server_time BETWEEN '{start_dt}.000' AND '{end_dt}.999' 
+                         AND NOT RIGHT(a.name, 8) = '.pdf.jpg'"""
 
     
         # Setup partition columns
@@ -264,19 +311,22 @@ def main(args_dict):
     if day is not None:
         partition_cols.append('day')
     
-    # Process visits first to reduce memory usage
-    s3logger.loginfo("Processing visits data...")
-    process_data_type(visit_query, "visits", conn, s3_visits_bucket, partition_cols, site, year, month, day, dry_run, debug_mode)
+    # Get chunk size from config with safe fallback
+    raw_chunk_size = config.get("PROCESSING", "CHUNK_SIZE", fallback="10000")
+    chunk_size, used_default = resolve_chunk_size(raw_chunk_size, default=10000)
+    if used_default and str(raw_chunk_size).strip() not in {"", "10000"}:
+        s3logger.logwarning(f"Invalid CHUNK_SIZE value '{raw_chunk_size}', using default 10000")
+    s3logger.loginfo(f"Using chunk size: {chunk_size}")
+    
+    # Process visits first (streaming with SSCursor)
+    s3logger.loginfo("Processing visits data with streaming...")
+    process_data_type(visit_query, "visits", conn_params, s3_visits_bucket, partition_cols, site, year, month, day, dry_run, debug_mode, chunk_size)
     
     # Process events separately after visits are processed and memory freed
-    s3logger.loginfo("Processing events data...")
-    process_data_type(event_query, "events", conn, s3_events_bucket, partition_cols, site, year, month, day, dry_run, debug_mode)
+    s3logger.loginfo("Processing events data with streaming...")
+    process_data_type(event_query, "events", conn_params, s3_events_bucket, partition_cols, site, year, month, day, dry_run, debug_mode, chunk_size)
                        
     log_memory_usage("BEFORE_CLEANUP", debug_mode)
-    
-    # Close database connection
-    if 'conn' in locals():
-        conn.close()
         
     # Final cleanup
     gc.collect()
@@ -309,7 +359,7 @@ def parse_args():
 
     parser.add_argument("-s",
                         "--site",
-                        default='all',
+                        type=int,
                         help="site id",
                         required=True)
 
@@ -334,19 +384,13 @@ def parse_args():
                         help="day",
                         required=False)
     
-    parser.add_argument("-t",
-                        "--type", 
-                        default='R', 
-                        type=str, 
-                        help="(R|L|N)", 
-                        required=False)
 
    
-    parser.add_argument("-v", "--verbose", default=False, type=bool, help="verbose mode")
+    parser.add_argument("-v", "--verbose", action='store_true', help="verbose mode")
 
     parser.add_argument("--debug", default=False, action='store_true', help="enable debug mode with detailed memory monitoring")
     
-    parser.add_argument("--dry_run", default=False, type=bool, required=False, help="dont write to s3")
+    parser.add_argument("--dry_run", action='store_true', help="dont write to s3")
 
     args = parser.parse_args()
 
