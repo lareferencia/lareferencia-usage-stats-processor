@@ -384,6 +384,13 @@ def parse_args():
                         help="day",
                         required=False)
     
+    # Kept for backwards compatibility with runner.py (not used in this script)
+    parser.add_argument("-t",
+                        "--type", 
+                        default='R', 
+                        type=str, 
+                        help="(R|L|N) - deprecated, kept for compatibility",
+                        required=False)
 
    
     parser.add_argument("-v", "--verbose", action='store_true', help="verbose mode")
