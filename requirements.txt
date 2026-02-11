@@ -2,6 +2,7 @@ opensearch-py
 awswrangler
 awswrangler[opensearch]
 pandas
+psutil
 PyMySQL==1.0.2
 Werkzeug==2.2.2
 pytz==2022.1
@@ -14,4 +15,3 @@ flask==2.2.3
 flask_sqlalchemy
 Flask-AppBuilder
 xxhash
-
