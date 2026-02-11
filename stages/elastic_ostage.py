@@ -4,10 +4,11 @@ import awswrangler as wr
 import sys
 import datetime
 import xxhash
+import copy
 
 class ElasticOutputStage(AbstractUsageStatsPipelineStage):
 
-    MAPPING = {
+    BASE_MAPPING = {
         "properties" : {
 
             "id" : { "type" : "keyword" },
@@ -44,18 +45,20 @@ class ElasticOutputStage(AbstractUsageStatsPipelineStage):
         self.STATS_BY_COUNTRY_LABEL = configContext.getLabel('STATS_BY_COUNTRY')
 
         self.level = configContext.getArg('type')
+
+        self.mapping = copy.deepcopy(self.BASE_MAPPING)
     
         # create the properties dict for the stats by country  
-        self.MAPPING['properties'][self.STATS_BY_COUNTRY_LABEL] = { "type": "nested" }
-        self.MAPPING['properties'][self.STATS_BY_COUNTRY_LABEL]['properties'] = {}
+        self.mapping['properties'][self.STATS_BY_COUNTRY_LABEL] = { "type": "nested" }
+        self.mapping['properties'][self.STATS_BY_COUNTRY_LABEL]['properties'] = {}
 
         # add the country label (2 letter)  to the stats by country properties
-        self.MAPPING['properties'][self.STATS_BY_COUNTRY_LABEL]['properties'][self.COUNTRY_LABEL] = { "type" : "keyword" }
+        self.mapping['properties'][self.STATS_BY_COUNTRY_LABEL]['properties'][self.COUNTRY_LABEL] = { "type" : "keyword" }
         
         # for each action, add a property (1 letter) to the MAPPING dictionary at the root level and to the stats by country
         for action in self.actions:
-            self.MAPPING['properties'][action] = { "type" : "long" }
-            self.MAPPING['properties'][self.STATS_BY_COUNTRY_LABEL]['properties'][action] = { "type" : "long" }
+            self.mapping['properties'][action] = { "type" : "long" }
+            self.mapping['properties'][self.STATS_BY_COUNTRY_LABEL]['properties'][action] = { "type" : "long" }
 
         self.helper = configContext.getDBHelper()
 
@@ -76,13 +79,11 @@ class ElasticOutputStage(AbstractUsageStatsPipelineStage):
         # create the index name
         index_name = helper.get_index_name(self.index_prefix, idsite)
 
-        source = data.source    
-
          # transform dict_df into a list of documents, converting the dictionary into a list of documents and          
         data.documents = [
             self._build_stats( 
             {
-              'id': xxhash.xxh64( '%s-%s-%s-%s-%s' % (idsite, identifier, year, month, day)  ).hexdigest(),
+              'id': xxhash.xxh64('%s-%s-%s-%s-%s-%s' % (idsite, self.level, identifier, year, month, day)).hexdigest(),
   
               'identifier': identifier, 
 
@@ -105,6 +106,10 @@ class ElasticOutputStage(AbstractUsageStatsPipelineStage):
 
         ## documentes to be indexed in the opensearch
         print ('Indexing %d documents' % len(data.documents))
+
+        if len(data.documents) == 0:
+            print('No documents to index')
+            return data
 
         try:
             opensearch = wr.opensearch.connect(
@@ -129,7 +134,7 @@ class ElasticOutputStage(AbstractUsageStatsPipelineStage):
 
             index = wr.opensearch.create_index(
                 client=opensearch,
-                mappings=self.MAPPING,
+                mappings=self.mapping,
                  settings={
                     "index": {
                         "number_of_shards": 1,

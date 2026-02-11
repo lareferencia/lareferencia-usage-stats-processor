@@ -29,15 +29,16 @@ def get_class(class_path):
 ## Class for data transfer between pipeline stages
 class UsageStatsData:
 
-    _data_dict = {}
-
     def __init__(self):
-        None
+        object.__setattr__(self, "_data_dict", {})
 
     def __getattr__(self, attribute):
         return self._data_dict.get(attribute, None)
 
     def __setattr__(self, name, value):
+        if name == "_data_dict":
+            object.__setattr__(self, name, value)
+            return
         self._data_dict[name] = value
 
     def __str__(self):
@@ -80,5 +81,4 @@ class UsageStatsProcessorPipeline:
         except Exception as e: 
             logger.error( 'A fatal exception ocurred processing data !!!! {}'.format(e) )
             traceback.print_exc()
-
 

@@ -1,6 +1,5 @@
 from processorpipeline import AbstractUsageStatsPipelineStage, UsageStatsData
 from configcontext import ConfigurationContext
-import uuid
 import re
 from lareferenciastatsdb import normalize_oai_identifier
 
@@ -12,7 +11,18 @@ class IdentifierFilterStage(AbstractUsageStatsPipelineStage):
 
     def __init__(self, configContext: ConfigurationContext):
         super().__init__(configContext)
-        #self.dbhelper = configContext.getDBHelper()
+        self.actions = configContext.getActions()
+        self.STATS_BY_COUNTRY_LABEL = configContext.getLabel('STATS_BY_COUNTRY')
+
+    def _merge_info(self, target_info, source_info):
+        for action in self.actions:
+            target_info[action] = target_info.get(action, 0) + source_info.get(action, 0)
+
+        target_by_country = target_info.setdefault(self.STATS_BY_COUNTRY_LABEL, {})
+        for country, source_country_info in source_info.get(self.STATS_BY_COUNTRY_LABEL, {}).items():
+            target_country_info = target_by_country.setdefault(country, {})
+            for action in self.actions:
+                target_country_info[action] = target_country_info.get(action, 0) + source_country_info.get(action, 0)
 
         
     def run(self, data: UsageStatsData) -> UsageStatsData:
@@ -21,7 +31,6 @@ class IdentifierFilterStage(AbstractUsageStatsPipelineStage):
         identifier_map_replace = data.source.identifier_map_replace
         identifier_map_filename = data.source.identifier_map_filename
         identifier_map_type = data.source.identifier_map_type
-        identifier_prefix = data.source.identifier_prefix
 
         ## write a file with the changed identifiers
         ##file = open("identifiers.txt", "a") 
@@ -38,8 +47,10 @@ class IdentifierFilterStage(AbstractUsageStatsPipelineStage):
                 dict_to_search = {}        
                 with open(identifier_map_filename, 'r') as file:
                     for line in file:
-                        #print(line)
-                        key, value = line.split(',')
+                        line = line.strip()
+                        if not line:
+                            continue
+                        key, value = line.split(',', 1)
                         dict_to_search[key.strip()] = value.strip()
             except:
                 raise ValueError("Error reading identifier map file %s" % identifier_map_filename)
@@ -57,8 +68,11 @@ class IdentifierFilterStage(AbstractUsageStatsPipelineStage):
         print("Identifiers:", len(data.agg_dict.keys()))
 
         hits = 0
+        normalized_agg_dict = {}
+        normalized_country_by_identifier_dict = {}
         # for every identifier in the data
-        for old_identifier in list(data.agg_dict.keys()):
+        for old_identifier, old_info in data.agg_dict.items():
+            new_identifier = old_identifier
 
             # if the identifier map type is map from file, get the new identifier from the dictionary
             if identifier_map_type == IdentifierFilterStage.IDENTIFIER_MAP_FROM_FILE:
@@ -66,19 +80,25 @@ class IdentifierFilterStage(AbstractUsageStatsPipelineStage):
                     new_identifier = dict_to_search[old_identifier]
                     hits += 1
 
-            # normalize the identifier
-            new_identifier = normalize_oai_identifier(old_identifier)
-            
             # if the identifier map type is regex replace, apply the regex
-            if identifier_map_type == IdentifierFilterStage.IDENTIFIER_MAP_REGEX_REPLACE:
+            elif identifier_map_type == IdentifierFilterStage.IDENTIFIER_MAP_REGEX_REPLACE:
                 new_identifier = regex.sub(identifier_map_replace, old_identifier)
+            else:
+                new_identifier = normalize_oai_identifier(old_identifier)
 
             #print(old_identifier, " --> " ,new_identifier)
 
-            # if the identifier has changed, update the dictionary
-            if new_identifier != old_identifier:
-                data.agg_dict[new_identifier] = data.agg_dict.pop(old_identifier)
-                ##file.write(old_identifier + " --> " + str(new_identifier) + "\n")
+            if new_identifier in normalized_agg_dict:
+                self._merge_info(normalized_agg_dict[new_identifier], old_info)
+            else:
+                normalized_agg_dict[new_identifier] = old_info
+
+            old_country = data.country_by_identifier_dict.get(old_identifier)
+            if old_country is not None and new_identifier not in normalized_country_by_identifier_dict:
+                normalized_country_by_identifier_dict[new_identifier] = old_country
+
+        data.agg_dict = normalized_agg_dict
+        data.country_by_identifier_dict = normalized_country_by_identifier_dict
 
         if identifier_map_type == IdentifierFilterStage.IDENTIFIER_MAP_FROM_FILE:
             print("Hits in map:", hits)
@@ -87,5 +107,4 @@ class IdentifierFilterStage(AbstractUsageStatsPipelineStage):
 
 
         return data       
-
 
