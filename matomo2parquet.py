@@ -4,12 +4,12 @@ import sys
 import argparse
 from calendar import monthrange
 import gc
+import warnings
 import psutil
 import tracemalloc
 
 import pymysql
 import pymysql.cursors
-import awswrangler as wr
 import pandas as pd
 
 import datetime
@@ -19,6 +19,12 @@ from s3logger import S3Logger
 
 # logger for s3
 s3logger = S3Logger('matomo2parquet');
+
+def emit_progress(message):
+    timestamp = datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+    line = f"[{timestamp}] {message}"
+    print(line)
+    s3logger.loginfo(message)
 
 def log_memory_usage(stage, debug_mode=False):
     """
@@ -120,81 +126,106 @@ def process_data_type(query, data_type, conn_params, s3_bucket, partition_cols, 
         print(f"[DEBUG] Chunk size: {chunk_size}")
         print(f"{'='*60}\n")
         s3logger.loginfo(f"Executing {data_type} query with chunk_size={chunk_size}: {query}")
+    else:
+        emit_progress(f"[{data_type}] Query started with chunk_size={chunk_size}")
     
     log_memory_usage(f"BEFORE_{data_type.upper()}_QUERY", debug_mode)
-    
-    # Create streaming connection with Server-Side Cursor
+
+    wr = None
+    if not dry_run:
+        import awswrangler as wr
+        emit_progress(f"[{data_type}] Target dataset: s3://{s3_bucket}")
+    else:
+        emit_progress(f"[{data_type}] Dry run mode enabled (no writes to S3)")
+
+    # Use Server-Side Cursor to stream results in chunks.
     streaming_conn = pymysql.connect(
         host=conn_params['host'],
         user=conn_params['user'],
         passwd=conn_params['passwd'],
         db=conn_params['db'],
         connect_timeout=conn_params.get('connect_timeout', 5),
-        cursorclass=pymysql.cursors.SSCursor  # Server-side cursor for streaming
+        cursorclass=pymysql.cursors.SSCursor
     )
     
     try:
         chunk_num = 0
         total_rows = 0
-        first_chunk = True
-        
-        # Stream data in chunks - query executes ONCE, results streamed
-        for chunk_df in pd.read_sql(query, streaming_conn, chunksize=chunk_size):
-            chunk_num += 1
-            rows_in_chunk = len(chunk_df)
-            total_rows += rows_in_chunk
-            
-            if debug_mode:
-                print(f"[DEBUG] {data_type} chunk {chunk_num}: {rows_in_chunk} rows (total so far: {total_rows})")
-            
-            if chunk_df.empty:
-                continue
-            
-            log_memory_usage(f"{data_type.upper()}_CHUNK_{chunk_num}", debug_mode)
-            
-            if debug_mode:
-                get_dataframe_memory_usage(chunk_df, f"{data_type}_chunk_{chunk_num}")
-                chunk_df = optimize_dataframe_memory(chunk_df, debug_mode)
-            
-            # Process data based on type
-            if data_type == "visits":
-                chunk_df['day'] = day if day is not None else 1
-                chunk_df['month'] = month
-                chunk_df['year'] = year
-            else:  # events
-                chunk_df['day'] = chunk_df['server_time'].dt.day
-                chunk_df['month'] = chunk_df['server_time'].dt.month
-                chunk_df['year'] = chunk_df['server_time'].dt.year
-            
-            # Write chunk to S3
-            if not dry_run:
-                # Use 'append' mode to add to existing dataset
-                # First chunk can use 'overwrite_partitions' if needed
-                write_mode = 'append'
+        persisted_rows = 0
+        persisted_chunks = 0
+
+        # pandas warns for non-SQLAlchemy DBAPI connections; this path is intentional
+        # because SSCursor streams rows from MySQL without loading everything in memory.
+        with warnings.catch_warnings():
+            warnings.filterwarnings(
+                "ignore",
+                message="pandas only supports SQLAlchemy connectable.*",
+                category=UserWarning,
+            )
+            for chunk_df in pd.read_sql(query, streaming_conn, chunksize=chunk_size):
+                chunk_num += 1
+                rows_in_chunk = len(chunk_df)
+                total_rows += rows_in_chunk
+                emit_progress(f"[{data_type}] Chunk {chunk_num}: fetched {rows_in_chunk} rows (total fetched: {total_rows})")
                 
-                s3logger.loginfo(f"Writing {data_type} chunk {chunk_num} ({rows_in_chunk} rows) to S3...")
-                wr.s3.to_parquet(
-                    df=chunk_df,
-                    path='s3://' + s3_bucket,
-                    dataset=True,
-                    mode=write_mode,
-                    partition_cols=partition_cols
-                )
-            else:
-                s3logger.loginfo(f"Dry run: would write {data_type} chunk {chunk_num} ({rows_in_chunk} rows)")
-            
-            # Clear chunk from memory
-            del chunk_df
-            gc.collect()
-            
-            log_memory_usage(f"AFTER_{data_type.upper()}_CHUNK_{chunk_num}_CLEANUP", debug_mode)
-        
+                if debug_mode:
+                    print(f"[DEBUG] {data_type} chunk {chunk_num}: {rows_in_chunk} rows (total so far: {total_rows})")
+                
+                if chunk_df.empty:
+                    continue
+                
+                log_memory_usage(f"{data_type.upper()}_CHUNK_{chunk_num}", debug_mode)
+                
+                if debug_mode:
+                    get_dataframe_memory_usage(chunk_df, f"{data_type}_chunk_{chunk_num}")
+                    chunk_df = optimize_dataframe_memory(chunk_df, debug_mode)
+                
+                # Process data based on type
+                if data_type == "visits":
+                    chunk_df['day'] = day if day is not None else 1
+                    chunk_df['month'] = month
+                    chunk_df['year'] = year
+                else:  # events
+                    chunk_df['day'] = chunk_df['server_time'].dt.day
+                    chunk_df['month'] = chunk_df['server_time'].dt.month
+                    chunk_df['year'] = chunk_df['server_time'].dt.year
+                
+                # Write chunk to S3
+                if not dry_run:
+                    # Use 'append' mode to add to existing dataset
+                    # First chunk can use 'overwrite_partitions' if needed
+                    write_mode = 'append'
+                    emit_progress(f"[{data_type}] Chunk {chunk_num}: persisting {rows_in_chunk} rows to s3://{s3_bucket}")
+                    wr.s3.to_parquet(
+                        df=chunk_df,
+                        path='s3://' + s3_bucket,
+                        dataset=True,
+                        mode=write_mode,
+                        partition_cols=partition_cols
+                    )
+                    persisted_rows += rows_in_chunk
+                    persisted_chunks += 1
+                    emit_progress(f"[{data_type}] Chunk {chunk_num}: persisted successfully to s3://{s3_bucket}")
+                else:
+                    emit_progress(f"[{data_type}] Chunk {chunk_num}: dry run, skip persist to s3://{s3_bucket}")
+                
+                # Clear chunk from memory
+                del chunk_df
+                gc.collect()
+                
+                log_memory_usage(f"AFTER_{data_type.upper()}_CHUNK_{chunk_num}_CLEANUP", debug_mode)
+
         if total_rows == 0:
             s3logger.logwarning(f"No {data_type} data for site: {site} year: {year} month: {month} day: {day}")
+            emit_progress(f"[{data_type}] No data found")
             if debug_mode:
                 print(f"[DEBUG] {data_type.upper()}: No data found")
         else:
             s3logger.loginfo(f"Completed {data_type}: processed {total_rows} rows in {chunk_num} chunks")
+            if dry_run:
+                emit_progress(f"[{data_type}] Completed dry run: {total_rows} rows across {chunk_num} chunks")
+            else:
+                emit_progress(f"[{data_type}] Completed: persisted {persisted_rows} rows in {persisted_chunks} chunks to s3://{s3_bucket}")
             if debug_mode:
                 print(f"\n[DEBUG] {data_type.upper()} COMPLETE: {total_rows} total rows in {chunk_num} chunks\n")
             
@@ -203,6 +234,15 @@ def process_data_type(query, data_type, conn_params, s3_bucket, partition_cols, 
         s3logger.loginfo(f"Closed streaming connection for {data_type}")
     
     log_memory_usage(f"AFTER_{data_type.upper()}_COMPLETE", debug_mode)
+    return {
+        "data_type": data_type,
+        "chunks": chunk_num,
+        "rows": total_rows,
+        "persisted_chunks": persisted_chunks,
+        "persisted_rows": persisted_rows,
+        "bucket": s3_bucket,
+        "dry_run": dry_run,
+    }
 
 def main(args_dict):
 
@@ -241,6 +281,10 @@ def main(args_dict):
         # logger bucket
         s3logger.set_bucket(config["S3_LOGS"]["LOGS_PATH"])
         s3logger.loginfo("Starting procesing on datetime: %s site: %s year: %s month: %s day: %s" % ( datetime.datetime.now(), site, year, month, day))
+        emit_progress(
+            f"Starting processing site={site} year={year} month={month} day={day} "
+            f"matomo_host={db_host} visits_path=s3://{s3_visits_bucket} events_path=s3://{s3_events_bucket}"
+        )
 
 
     except Exception as e:
@@ -265,9 +309,11 @@ def main(args_dict):
         test_conn = pymysql.connect(**conn_params)
         test_conn.close()
         s3logger.loginfo("Database connection test successful")
+        emit_progress("Matomo DB connection test successful")
     except pymysql.MySQLError as e:
         s3logger.logerror("ERROR: Unexpected error: Could not connect to MySQL instance.")
         s3logger.logerror(e)
+        emit_progress("Matomo DB connection test failed")
         sys.exit(1)
 
     
@@ -332,12 +378,12 @@ def main(args_dict):
     s3logger.loginfo(f"Using chunk size: {chunk_size}")
     
     # Process visits first (streaming with SSCursor)
-    s3logger.loginfo("Processing visits data with streaming...")
-    process_data_type(visit_query, "visits", conn_params, s3_visits_bucket, partition_cols, site, year, month, day, dry_run, debug_mode, chunk_size)
+    emit_progress("Starting VISITS extraction and persistence")
+    visits_result = process_data_type(visit_query, "visits", conn_params, s3_visits_bucket, partition_cols, site, year, month, day, dry_run, debug_mode, chunk_size)
     
     # Process events separately after visits are processed and memory freed
-    s3logger.loginfo("Processing events data with streaming...")
-    process_data_type(event_query, "events", conn_params, s3_events_bucket, partition_cols, site, year, month, day, dry_run, debug_mode, chunk_size)
+    emit_progress("Starting EVENTS extraction and persistence")
+    events_result = process_data_type(event_query, "events", conn_params, s3_events_bucket, partition_cols, site, year, month, day, dry_run, debug_mode, chunk_size)
                        
     log_memory_usage("BEFORE_CLEANUP", debug_mode)
         
@@ -353,12 +399,50 @@ def main(args_dict):
             s3logger.loginfo(f"MEMORY SUMMARY - Current: {current / 1024 / 1024:.2f}MB, Peak: {peak / 1024 / 1024:.2f}MB")
             tracemalloc.stop()
                        
+    if dry_run:
+        emit_progress(
+            "Dry run summary: "
+            f"visits_rows={visits_result['rows']} events_rows={events_result['rows']} (no S3 writes performed)"
+        )
+    else:
+        emit_progress(
+            "S3 persistence summary: "
+            f"visits={visits_result['persisted_rows']} rows to s3://{visits_result['bucket']} | "
+            f"events={events_result['persisted_rows']} rows to s3://{events_result['bucket']}"
+        )
+        emit_progress("S3 persistence completed successfully")
+
     s3logger.loginfo("Ending procesing on datetime : %s site: %s year: %s month: %s day: %s" % ( datetime.datetime.now(), site, year, month, day))
+    emit_progress(f"Finished processing site={site} year={year} month={month} day={day}")
+
+
+def validate_cli_args(parser, args):
+    if args.site <= 0:
+        parser.error("argument -s/--site: must be a positive integer")
+
+    if args.year < 1 or args.year > 9999:
+        parser.error("argument -y/--year: must be between 1 and 9999")
+
+    if args.month < 1 or args.month > 12:
+        parser.error("argument -m/--month: must be between 1 and 12")
+
+    if args.day is not None:
+        if args.day < 1:
+            parser.error("argument -d/--day: must be greater than or equal to 1")
+
+        max_day = monthrange(args.year, args.month)[1]
+        if args.day > max_day:
+            parser.error(
+                f"argument -d/--day: must be between 1 and {max_day} for {args.year}-{args.month:02d}"
+            )
 
 
 def parse_args():
 
-    parser = argparse.ArgumentParser(description="Usage Statistics Matomo mysql to S3 persistence", usage="python3 matomo2s3.py -s <site> -y <year> --from_month <month> --to_month <month> --from_day <day> --to_day <day>")
+    parser = argparse.ArgumentParser(
+        description="Usage Statistics Matomo MySQL to S3 persistence",
+        epilog="Example: python matomo2parquet.py -c config.ini -s 48 -y 2026 -m 1 [-d 15]",
+    )
 
     parser.add_argument("--loglevel", 
                         help="Log level", 
@@ -378,14 +462,12 @@ def parse_args():
 
     parser.add_argument("-y",
                         "--year",
-                        default=datetime.datetime.now().year,
                         type=int,
                         help="year",
                         required=True)
     
     parser.add_argument("-m",
                         "--month",
-                        default=datetime.datetime.now().month,
                         type=int,
                         help="month",
                         required=True)
@@ -413,6 +495,7 @@ def parse_args():
     parser.add_argument("--dry_run", action='store_true', help="dont write to s3")
 
     args = parser.parse_args()
+    validate_cli_args(parser, args)
 
     return args 
 

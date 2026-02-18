@@ -7,6 +7,8 @@ from configcontext import ConfigurationContext
 from typing import List
 import logging
 import traceback
+import time
+import datetime
 logger = logging.getLogger()
 
 ## Function to get class from class path
@@ -70,15 +72,71 @@ class UsageStatsProcessorPipeline:
         self._filters_stage = [ get_class(filter)(configContext) for filter in filters ]
         self._output_stage = get_class(output)(configContext)
 
+    @staticmethod
+    def _now():
+        return datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+
+    @staticmethod
+    def _len_or_none(value):
+        if value is None:
+            return None
+        try:
+            return len(value)
+        except Exception:
+            return None
+
+    @classmethod
+    def _snapshot(cls, data):
+        events_rows = cls._len_or_none(getattr(data, "events_df", None))
+        visits_rows = cls._len_or_none(getattr(data, "visits_df", None))
+        agg_count = cls._len_or_none(getattr(data, "agg_dict", None))
+        docs_count = cls._len_or_none(getattr(data, "documents", None))
+
+        parts = []
+        if events_rows is not None:
+            parts.append(f"events={events_rows}")
+        if visits_rows is not None:
+            parts.append(f"visits={visits_rows}")
+        if agg_count is not None:
+            parts.append(f"identifiers={agg_count}")
+        if docs_count is not None:
+            parts.append(f"documents={docs_count}")
+
+        return ", ".join(parts) if parts else "no-stats"
+
+    def _run_stage(self, stage, stage_name, data):
+        print(f"[{self._now()}] Stage start: {stage_name}")
+        stage_start = time.time()
+        output = stage.run(data)
+        elapsed = time.time() - stage_start
+
+        if output is None:
+            print(f"[{self._now()}] Stage end: {stage_name} ({elapsed:.2f}s, output=None)")
+            return output
+
+        print(f"[{self._now()}] Stage end: {stage_name} ({elapsed:.2f}s, {self._snapshot(output)})")
+        return output
+
     def run(self):
-        data = self._input_stage.run(UsageStatsData())
+        pipeline_start = time.time()
+        data = UsageStatsData()
+        data = self._run_stage(self._input_stage, self._input_stage.__class__.__name__, data)
 
         for filter in self._filters_stage:
-            data = filter.run(data)            
+            if data is None:
+                break
+            data = self._run_stage(filter, filter.__class__.__name__, data)
+
+        if data is None:
+            print(f"[{self._now()}] Pipeline aborted before output stage (data=None)")
+            return None
 
         try:
-            return self._output_stage.run(data)
-        except Exception as e: 
+            data = self._run_stage(self._output_stage, self._output_stage.__class__.__name__, data)
+            total_elapsed = time.time() - pipeline_start
+            print(f"[{self._now()}] Pipeline finished ({total_elapsed:.2f}s)")
+            return data
+        except Exception as e:
             logger.error( 'A fatal exception ocurred processing data !!!! {}'.format(e) )
             traceback.print_exc()
-
+            return None

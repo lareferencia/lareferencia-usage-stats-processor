@@ -40,9 +40,17 @@ class S3ParquetInputStage(AbstractUsageStatsPipelineStage):
             day = str(day)
             return lambda x: (x['idsite'] == idsite) and (x['year'] ==  year ) and (x['month'] == month) and (x['day'] == day)
         
+    def _partition_description(idsite, year, month, day):
+        parts = [f"idsite={idsite}", f"year={year}"]
+        if month is not None:
+            parts.append(f"month={month}")
+        if day is not None:
+            parts.append(f"day={day}")
+        return ", ".join(parts)
+        
         
     
-    def _read_parquet_file(bucket_path, columns, partition_filter):
+    def _read_parquet_file(bucket_path, columns, partition_filter, partition_description):
             
         try: 
             df = wr.s3.read_parquet(
@@ -53,8 +61,11 @@ class S3ParquetInputStage(AbstractUsageStatsPipelineStage):
             )
             return df
         
-        except:
-            print("Error reading parquet file %s" % bucket_path)
+        except Exception as exc:
+            print(
+                "Error reading parquet file s3://%s for partition [%s]: %s"
+                % (bucket_path, partition_description, exc)
+            )
             
     
     
@@ -76,6 +87,7 @@ class S3ParquetInputStage(AbstractUsageStatsPipelineStage):
         type = source.type
 
         partition_filter = S3ParquetInputStage._partition_filter(idsite, year, month, day)
+        partition_description = S3ParquetInputStage._partition_description(idsite, year, month, day)
 
         # set the custom_var column name based on the type
         identifier_custom_var = 'custom_var_v1' if type == SOURCE_TYPE_REPOSITORY else 'custom_var_v6'
@@ -91,7 +103,12 @@ class S3ParquetInputStage(AbstractUsageStatsPipelineStage):
             events_columns.append(record_info_custom_var)
         
         # read the events file       
-        data.events_df = S3ParquetInputStage._read_parquet_file( self.events_path, events_columns, partition_filter )
+        data.events_df = S3ParquetInputStage._read_parquet_file(
+            self.events_path,
+            events_columns,
+            partition_filter,
+            partition_description,
+        )
         
         # if the events file is empty, create an empty dataframe
         if data.events_df is None:
@@ -115,7 +132,12 @@ class S3ParquetInputStage(AbstractUsageStatsPipelineStage):
         visits_columns = ['idvisit', 'visit_last_action_time', 'visit_first_action_time', 'visit_total_actions', 'location_country']
 
         # read the visits file
-        data.visits_df = S3ParquetInputStage._read_parquet_file ( self.visits_path, visits_columns, partition_filter )
+        data.visits_df = S3ParquetInputStage._read_parquet_file(
+            self.visits_path,
+            visits_columns,
+            partition_filter,
+            partition_description,
+        )
         
         # if the visits file is empty, create an empty dataframe
         if data.visits_df is None:

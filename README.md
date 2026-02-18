@@ -86,6 +86,12 @@ Secciones clave:
 python matomo2parquet.py -c config.ini -s <site_id> -y <yyyy> -m <mm> [-d <dd>] [--debug] [--dry_run]
 ```
 
+Notas CLI:
+
+- Parámetros obligatorios: `-s/--site`, `-y/--year`, `-m/--month`.
+- `-d/--day` es opcional, pero si se usa debe ser válido para el `year/month` enviado.
+- Ayuda rápida: `python matomo2parquet.py --help`.
+
 ### 2) S3 -> OpenSearch
 
 ```bash

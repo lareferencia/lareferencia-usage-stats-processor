@@ -70,6 +70,8 @@ class IdentifierFilterStage(AbstractUsageStatsPipelineStage):
         hits = 0
         normalized_agg_dict = {}
         normalized_country_by_identifier_dict = {}
+        data.identifier_replacements = []
+
         # for every identifier in the data
         for old_identifier, old_info in data.agg_dict.items():
             new_identifier = old_identifier
@@ -86,7 +88,11 @@ class IdentifierFilterStage(AbstractUsageStatsPipelineStage):
             else:
                 new_identifier = normalize_oai_identifier(old_identifier)
 
-            #print(old_identifier, " --> " ,new_identifier)
+            data.identifier_replacements.append({
+                "original_identifier": old_identifier,
+                "replaced_identifier": new_identifier,
+                "changed": old_identifier != new_identifier,
+            })
 
             if new_identifier in normalized_agg_dict:
                 self._merge_info(normalized_agg_dict[new_identifier], old_info)
@@ -104,7 +110,7 @@ class IdentifierFilterStage(AbstractUsageStatsPipelineStage):
             print("Hits in map:", hits)
                 
         print("Normalized identifiers:", len(data.agg_dict.keys()))
+        print("Identifier replacements tracked:", len(data.identifier_replacements))
 
 
         return data       
-

@@ -5,6 +5,7 @@ import sys
 import datetime
 import xxhash
 import copy
+from urllib.parse import urlparse
 
 class ElasticOutputStage(AbstractUsageStatsPipelineStage):
 
@@ -30,6 +31,27 @@ class ElasticOutputStage(AbstractUsageStatsPipelineStage):
     def _build_stats(self, obj, stats):
         obj.update([(action, stats[action]) for action in self.actions])
         return obj
+
+    @staticmethod
+    def _parse_opensearch_endpoint(elastic_url):
+        raw = str(elastic_url).strip()
+        if "://" not in raw:
+            raw = f"http://{raw}"
+
+        parsed = urlparse(raw)
+        host = parsed.hostname
+        port = parsed.port
+
+        if host is None:
+            raise ValueError(f"Invalid OpenSearch endpoint: {elastic_url}")
+
+        if port is None:
+            port = 443 if parsed.scheme == "https" else 80
+
+        username = parsed.username
+        password = parsed.password
+
+        return host, port, username, password
 
 
     def __init__(self, configContext: ConfigurationContext):
@@ -112,11 +134,19 @@ class ElasticOutputStage(AbstractUsageStatsPipelineStage):
             return data
 
         try:
+            host, port, username, password = self._parse_opensearch_endpoint(self.elastic_url)
+            print(f"Connecting to OpenSearch host={host} port={port}")
+        except Exception as e:
+            print("Invalid OpenSearch endpoint '%s': %s" % (self.elastic_url, e))
+            sys.exit(1)
+
+        try:
             opensearch = wr.opensearch.connect(
-                host=self.elastic_url
-        #     username='FGAC-USERNAME(OPTIONAL)',
-        #     password='FGAC-PASSWORD(OPTIONAL)'
-        )
+                host=host,
+                port=port,
+                username=username,
+                password=password,
+            )
         except Exception as e:
             print("Error connecting to opensearch: %s" % e)
             sys.exit(1)
